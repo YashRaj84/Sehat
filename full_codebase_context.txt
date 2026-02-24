@@ -1,0 +1,3358 @@
+PROJECT CONTEXT:
+
+
+--- START OF FILE: backend\package.json ---
+{
+  "dependencies": {
+    "axios": "^1.13.4",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.1.5"
+  },
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "author": "Yash Raj",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
+
+--- END OF FILE: backend\package.json ---
+
+--- START OF FILE: backend\src\app.js ---
+import express from "express";
+import cors from "cors";
+import authRoutes from "./routes/auth.routes.js";
+import foodRoutes from "./routes/food.routes.js";
+import logRoutes from "./routes/log.routes.js";
+import waterRoutes from "./routes/water.routes.js";
+import dotenv from "dotenv";
+dotenv.config();
+
+const app = express();
+
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true
+}));
+
+app.use(express.json());
+
+app.use("/api/auth", authRoutes);
+app.use("/api/food", foodRoutes);
+app.use("/api/log", logRoutes);
+app.use("/api/water", waterRoutes);
+
+app.get("/", (req, res) => {
+  res.send("🚀 API is running");
+});
+
+export default app;
+
+--- END OF FILE: backend\src\app.js ---
+
+--- START OF FILE: backend\src\config\db.js ---
+import mongoose from "mongoose";
+
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGO_URI);
+
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+  } catch (error) {
+    console.error("❌ MongoDB connection failed:", error.message);
+    process.exit(1); // stop server if DB fails
+  }
+};
+
+export default connectDB;
+
+--- END OF FILE: backend\src\config\db.js ---
+
+--- START OF FILE: backend\src\config\env.js ---
+import dotenv from "dotenv";
+import path from "path";
+
+const loadEnv = () => {
+  dotenv.config({
+    path: path.resolve(process.cwd(), ".env")
+  });
+};
+
+export default loadEnv;
+
+--- END OF FILE: backend\src\config\env.js ---
+
+--- START OF FILE: backend\src\controllers\auth.controller.js ---
+import User from "../models/User.js";
+import { generateToken } from "../utils/generateToken.js";
+import { calculateDailyCalories } from "../utils/calorieCalculator.js";
+
+/**
+ * REGISTER USER
+ * POST /api/auth/register
+ */
+export const registerUser = async (req, res) => {
+  const {
+    name,
+    email,
+    password,
+    age,
+    gender,
+    height,
+    weight,
+    activityLevel,
+    goal,
+    dietType,
+    allergies
+  } = req.body;
+
+  const userExists = await User.findOne({ email });
+  if (userExists) {
+    return res.status(400).json({ message: "User already exists" });
+  }
+
+  const dailyCalorieLimit = calculateDailyCalories({
+    age,
+    gender,
+    height,
+    weight,
+    activityLevel,
+    goal
+  });
+
+  const user = await User.create({
+    name,
+    email,
+    password,
+    age,
+    gender,
+    height,
+    weight,
+    activityLevel,
+    goal,
+    dietType,
+    allergies,
+    dailyCalorieLimit
+  });
+
+  const token = generateToken(user._id);
+
+  return res.status(201).json({
+    token,
+    user: {
+      id: user._id,
+      email: user.email,
+      dailyCalorieLimit: user.dailyCalorieLimit
+    }
+  });
+};
+
+/**
+ * LOGIN USER
+ * POST /api/auth/login
+ */
+export const loginUser = async (req, res) => {
+  const { email, password } = req.body;
+
+  const user = await User.findOne({ email }).select("+password");
+  if (!user) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  const token = generateToken(user._id);
+
+  return res.json({
+    token,
+    user: {
+      id: user._id,
+      email: user.email,
+      dailyCalorieLimit: user.dailyCalorieLimit
+    }
+  });
+};
+
+--- END OF FILE: backend\src\controllers\auth.controller.js ---
+
+--- START OF FILE: backend\src\controllers\food.controller.js ---
+import Ingredient from "../models/Ingredient.js";
+import { searchUSDAFoods } from "../services/usda.service.js";
+import DailyLog from "../models/DailyLog.js"; // Import DailyLog
+
+export const getRecentFoods = async (req, res) => {
+  try {
+    // 1. Find the user's last 30 days of logs
+    const logs = await DailyLog.find({
+      user: req.user._id,
+    })
+      .sort({ date: -1 }) // Newest first
+      .limit(30)
+      .populate("foodItems.ingredient"); // <--- POPULATE THE NEW PATH
+
+    // 2. Extract unique ingredients from the flat list
+    const allItems = [];
+    const seenIds = new Set();
+
+    logs.forEach((log) => {
+      // Check if the new array exists
+      if (log.foodItems && log.foodItems.length > 0) {
+        log.foodItems.forEach((item) => {
+          // Safety check: ensure ingredient exists and hasn't been added yet
+          if (item.ingredient && !seenIds.has(item.ingredient._id.toString())) {
+            seenIds.add(item.ingredient._id.toString());
+            allItems.push(item.ingredient);
+          }
+        });
+      }
+    });
+
+    // 3. Return top 20 unique recent items
+    res.json(allItems.slice(0, 20));
+  } catch (error) {
+    console.error("GET RECENTS ERROR:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+/* =========================================
+   HELPER: INTELLIGENT CATEGORY MAPPING
+   Maps USDA 'foodCategory' strings to your App's strict Schema
+========================================= */
+const mapUsdaCategory = (usdaCategory, itemName) => {
+  // If USDA doesn't give a category, check the name or default to 'processed'
+  const cat = (usdaCategory || "").toLowerCase();
+  const name = (itemName || "").toLowerCase();
+
+  // 1. Vegetables
+  if (cat.includes("vegetable") || cat.includes("potato")) return "vegetables";
+
+  // 2. Fruits
+  if (cat.includes("fruit") || cat.includes("juice")) return "fruits";
+
+  // 3. Legumes (Beans, Lentils)
+  if (cat.includes("legume") || cat.includes("bean") || cat.includes("lentil") || cat.includes("peas")) return "legumes";
+
+  // 4. Grains & Cereals
+  if (cat.includes("grain") || cat.includes("cereal") || cat.includes("pasta") || cat.includes("bread") || cat.includes("rice") || cat.includes("bakery")) return "grains";
+
+  // 5. Nuts & Seeds
+  if (cat.includes("nut") || cat.includes("seed")) return "nuts_seeds";
+
+  // 6. Dairy
+  if (cat.includes("dairy") || cat.includes("cheese") || cat.includes("milk") || cat.includes("yogurt") || cat.includes("cream")) return "dairy";
+
+  // 7. Eggs
+  if (cat.includes("egg") || name.includes("egg")) return "eggs";
+
+  // 8. Meat & Poultry
+  if (cat.includes("meat") || cat.includes("poultry") || cat.includes("pork") || cat.includes("beef") || cat.includes("chicken") || cat.includes("fish") || cat.includes("seafood") || cat.includes("sausage")) return "meat";
+
+  // 9. Oils & Fats
+  if (cat.includes("fat") || cat.includes("oil") || cat.includes("butter") || cat.includes("margarine")) return "oils_fats";
+
+  // 10. Millets (USDA often groups these under grains, so we check names specifically)
+  if (name.includes("millet") || name.includes("sorghum") || name.includes("bajra") || name.includes("ragi") || name.includes("jowar")) return "millets";
+
+  // Default Fallback
+  return "processed";
+};
+
+/* =========================================
+   CONTROLLER: GET INGREDIENTS
+========================================= */
+export const getIngredients = async (req, res) => {
+  try {
+    const { dietType, allergies } = req.user;
+    const { search, category } = req.query;
+
+    let query = {
+      $or: [
+        { createdBy: null },           // Global
+        { createdBy: req.user._id }    // Personal
+      ]
+    };
+
+    // --- 1. Local Database Query ---
+    if (dietType === "veg") query["tags.isVeg"] = true;
+    if (dietType === "vegan") query["tags.isVegan"] = true;
+    if (dietType === "jain") query["tags.isJain"] = true;
+
+    if (allergies?.length) {
+      query.allergens = { $nin: allergies };
+    }
+
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
+    }
+
+    if (category) {
+      query.category = category;
+    }
+
+    // Fetch local results
+    let results = await Ingredient.find(query).sort({ name: 1 });
+
+    // --- 2. USDA Search Integration ---
+    if (search) {
+      try {
+        const usdaRaw = await searchUSDAFoods(search);
+
+        const usdaNormalized = usdaRaw.map((item) => {
+          // Helper to extract specific nutrient values
+          const getNutrient = (id) => {
+            const n = item.foodNutrients.find(
+              (x) => x.nutrientNumber === id || x.nutrientId === id
+            );
+            return n ? n.value : 0;
+          };
+
+          // 🔥 MAP THE CATEGORY HERE
+          const mappedCategory = mapUsdaCategory(item.foodCategory, item.description);
+
+          return {
+            name: item.description.toLowerCase(),
+            category: mappedCategory, // This now holds a valid enum value like 'dairy' or 'grains'
+            caloriesPer100g:
+              getNutrient("208") ||
+              getNutrient("2047") ||
+              getNutrient("1008") ||
+              0,
+            protein: getNutrient("203") || getNutrient("1003") || 0,
+            carbs: getNutrient("205") || getNutrient("1005") || 0,
+            fats: getNutrient("204") || getNutrient("1004") || 0,
+            unitType: "gram",
+            baseUnit: "g",
+            _id: null, // Frontend uses this to detect USDA items
+          };
+        });
+
+        // Optional: Filter USDA results if user has a category filter active
+        let finalUsda = usdaNormalized;
+        if (category) {
+          finalUsda = usdaNormalized.filter((i) => i.category === category);
+        }
+
+        // Merge results
+        results = [...results, ...finalUsda];
+      } catch (usdaError) {
+        console.error("USDA Search Error:", usdaError.message);
+        // We continue even if USDA fails, just returning local results
+      }
+    }
+
+    return res.json({
+      source: "mixed",
+      items: results,
+    });
+  } catch (error) {
+    console.error("GET INGREDIENTS ERROR:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+/* =========================================
+   CONTROLLER: CREATE INGREDIENT
+========================================= */
+export const createIngredient = async (req, res) => {
+  try {
+    const {
+      name,
+      caloriesPer100g,
+      protein,
+      carbs,
+      fats,
+      unitType,
+      category,
+    } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: "Name required" });
+    }
+
+    const normalizedName = name.toLowerCase().trim();
+
+    // Reuse if exists
+    const existing = await Ingredient.findOne({ name: normalizedName });
+    if (existing) {
+      return res.json(existing);
+    }
+
+    // --- SAFETY CHECK FOR CATEGORY ---
+    // Ensure the category being saved is actually valid in your Schema
+    const VALID_CATEGORIES = [
+      "millets", "grains", "legumes", "dairy", "vegetables",
+      "fruits", "nuts_seeds", "oils_fats", "meat", "eggs", "processed"
+    ];
+    
+    // If invalid (e.g., 'other'), fallback to 'processed'
+    const finalCategory = VALID_CATEGORIES.includes(category) 
+        ? category 
+        : "other";
+
+    const ingredient = new Ingredient({
+      name: normalizedName,
+      caloriesPer100g: Number(caloriesPer100g) || 0,
+      protein: Number(protein) || 0,
+      carbs: Number(carbs) || 0,
+      fats: Number(fats) || 0,
+      unitType: unitType || "gram",
+      baseUnit: "g",
+      category: finalCategory,
+      createdBy: req.user._id,
+      tags: { isVeg: true },
+      allergens: [],
+    });
+
+    await ingredient.save();
+    return res.status(201).json(ingredient);
+
+  } catch (error) {
+    console.error("CREATE INGREDIENT ERROR:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const updateIngredientCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { category } = req.body;
+
+    const normalizedCategory = category?.toLowerCase().trim();
+
+    const ingredient = await Ingredient.findByIdAndUpdate(
+      { _id: id, $or: [{ createdBy: req.user._id }, { createdBy: null }] },
+      { category: normalizedCategory },
+      { new: true, runValidators: true }
+    );
+
+    if (!ingredient) {
+      return res.status(404).json({ message: "Ingredient not found" });
+    }
+
+    res.json(ingredient);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+--- END OF FILE: backend\src\controllers\food.controller.js ---
+
+--- START OF FILE: backend\src\controllers\log.controller.js ---
+import DailyLog from "../models/DailyLog.js";
+import Ingredient from "../models/Ingredient.js";
+import { calculateMealValues } from "../utils/logCalculator.js";
+import { generateSuggestions } from "../utils/suggestionEngine.js";
+import { updateStreak } from "../utils/streakUtils.js";
+import { convertToBaseUnit } from "../utils/unitConverter.js";
+import { calculateCategoryTotals } from "../utils/categoryAnalytics.js";
+
+import User from "../models/User.js";
+
+/* Helper: get today's date */
+const today = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+
+/* Helper: recalculate totals from meals */
+const recalcTotals = (log) => {
+  let calories = 0;
+  let protein = 0;
+  let carbs = 0;
+  let fats = 0;
+
+  Object.values(log.meals).forEach((mealArr) => {
+    mealArr.forEach((item) => {
+      calories += item.calories || 0;
+      protein += item.protein || 0;
+      carbs += item.carbs || 0;
+      fats += item.fats || 0;
+    });
+  });
+
+  log.totalCalories = calories;
+  log.totalProtein = protein;
+  log.totalCarbs = carbs;
+  log.totalFats = fats;
+};
+
+/* =========================
+   GET TODAY'S LOG
+========================= */
+export const getTodayLog = async (req, res) => {
+  try {
+    let log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    }).populate("foodItems.ingredient");
+
+    if (!log) {
+      log = await DailyLog.create({
+        user: req.user._id,
+        date: today(),
+        foodItems: [],
+        waterConsumed: 0
+      });
+    }
+    if (log.foodItems) {
+      log.foodItems.sort((a, b) => new Date(a.loggedAt) - new Date(b.loggedAt));
+    }
+
+    return res.json(log);
+  } catch (err) {
+    console.error("GET LOG ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* =========================
+   ADD MEAL ITEM
+========================= */
+export const addFoodItem = async (req, res) => {
+  try {
+    const { mealType, ingredientId, quantity } = req.body;
+
+    if (!["breakfast", "lunch", "snacks", "dinner"].includes(mealType)) {
+      return res.status(400).json({ message: "Invalid meal type" });
+    }
+
+    const ingredient = await Ingredient.findById(ingredientId);
+    if (!ingredient) {
+      return res.status(404).json({ message: "Ingredient not found" });
+    }
+
+    let log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    });
+
+    if (!log) {
+      log = await DailyLog.create({
+        user: req.user._id,
+        date: today(),
+        meals: {
+          breakfast: [],
+          lunch: [],
+          snacks: [],
+          dinner: []
+        }
+      });
+    }
+
+    const normalizedQty = convertToBaseUnit(
+      quantity,
+      req.body.unit, // unit sent from frontend
+      ingredient
+    );
+
+    // nutrition is calculated using normalized quantity
+    // const values = calculateMealValues(ingredient, normalizedQty);
+
+    // 🔍 CHECK IF INGREDIENT ALREADY EXISTS IN THIS MEAL
+    const mealArr = log.meals[mealType];
+
+    const existingItem = mealArr.find(
+      item => item.ingredient.toString() === ingredient._id.toString()
+    );
+
+    if (existingItem) {
+      const prevNormalized = existingItem.normalizedQuantity ?? 0;
+      const newNormalized = prevNormalized + normalizedQty;
+
+      const values = calculateMealValues(ingredient, newNormalized);
+
+      existingItem.normalizedQuantity = newNormalized;
+      existingItem.quantity = newNormalized;
+      existingItem.unit = ingredient.baseUnit;
+
+      existingItem.calories = values.calories;
+      existingItem.protein = values.protein;
+      existingItem.carbs = values.carbs;
+      existingItem.fats = values.fats;
+    } else {
+      const values = calculateMealValues(ingredient, normalizedQty);
+
+      mealArr.push({
+        ingredient: ingredient._id,
+        quantity: normalizedQty,
+        unit: ingredient.baseUnit,
+        normalizedQuantity: normalizedQty,
+        calories: values.calories,
+        protein: values.protein,
+        carbs: values.carbs,
+        fats: values.fats
+      });
+    }
+
+
+
+    // recalc totals safely
+    recalcTotals(log);
+
+    // suggestions
+    const user = await User.findById(req.user._id);
+    log.suggestions = generateSuggestions(log, user);
+
+    await log.save();
+    await updateStreak(req.user._id);
+
+    res.json(log);
+  } catch (err) {
+    console.error("ADD MEAL ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* =========================
+   REMOVE MEAL ITEM
+========================= */
+export const removeFoodItem = async (req, res) => {
+  try {
+    const { mealType, itemId } = req.body;
+
+    let log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    });
+
+    if (!log) {
+      return res.status(404).json({ message: "Log not found" });
+    }
+
+    log.meals[mealType] = log.meals[mealType].filter(
+      (item) => item._id.toString() !== itemId
+    );
+
+    recalcTotals(log);
+
+    const user = await User.findById(req.user._id);
+    log.suggestions = generateSuggestions(log, user);
+
+    await log.save();
+    res.json(log);
+  } catch (err) {
+    console.error("REMOVE ITEM ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateFoodItem = async (req, res) => {
+  try {
+    const { mealType, itemId, quantity } = req.body;
+
+    if (!["breakfast", "lunch", "snacks", "dinner"].includes(mealType)) {
+      return res.status(400).json({ message: "Invalid meal type" });
+    }
+
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({ message: "Invalid quantity" });
+    }
+
+    const log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    });
+
+    if (!log) {
+      return res.status(404).json({ message: "Log not found" });
+    }
+
+    const item = log.meals[mealType].id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    // Recalculate nutrition based on ingredient
+    const ingredient = await Ingredient.findById(item.ingredient);
+    if (!ingredient) {
+      return res.status(404).json({ message: "Ingredient not found" });
+    }
+
+    const values = calculateMealValues(ingredient, quantity);
+
+    item.quantity = quantity;
+    item.calories = values.calories;
+    item.protein = values.protein;
+    item.carbs = values.carbs;
+    item.fats = values.fats;
+
+    // Recalculate totals safely
+    const recalcTotals = (log) => {
+      let calories = 0, protein = 0, carbs = 0, fats = 0;
+      Object.values(log.meals).forEach(arr =>
+        arr.forEach(i => {
+          calories += i.calories || 0;
+          protein += i.protein || 0;
+          carbs += i.carbs || 0;
+          fats += i.fats || 0;
+        })
+      );
+      log.totalCalories = calories;
+      log.totalProtein = protein;
+      log.totalCarbs = carbs;
+      log.totalFats = fats;
+    };
+
+    recalcTotals(log);
+
+    const user = await User.findById(req.user._id);
+    log.suggestions = generateSuggestions(log, user);
+
+    await log.save();
+    res.json(log);
+  } catch (err) {
+    console.error("UPDATE ITEM ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateWater = async (req, res) => {
+  try {
+    const { amount } = req.body; // +250 or -250
+
+    let log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    });
+
+    if (!log) {
+      log = await DailyLog.create({
+        user: req.user._id,
+        date: today(),
+        meals: {
+          breakfast: [],
+          lunch: [],
+          snacks: [],
+          dinner: []
+        },
+        waterConsumed: 0
+      });
+    }
+
+    log.waterConsumed = Math.max(
+      0,
+      (log.waterConsumed || 0) + amount
+    );
+
+    await log.save();
+    res.json(log);
+  } catch (err) {
+    console.error("UPDATE WATER ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getTodayCategoryStats = async (req, res) => {
+  try {
+    const log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    }).populate(
+      "foodItems.ingredient"
+    );
+
+    if (!log) {
+      return res.json({});
+    }
+
+    const categoryStats = calculateCategoryTotals(log);
+
+    res.json(categoryStats);
+  } catch (err) {
+    console.error("CATEGORY STATS ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+--- END OF FILE: backend\src\controllers\log.controller.js ---
+
+--- START OF FILE: backend\src\controllers\stats.controller.js ---
+
+--- END OF FILE: backend\src\controllers\stats.controller.js ---
+
+--- START OF FILE: backend\src\controllers\user.controller.js ---
+
+--- END OF FILE: backend\src\controllers\user.controller.js ---
+
+--- START OF FILE: backend\src\controllers\water.controller.js ---
+import DailyLog from "../models/DailyLog.js";
+import User from "../models/User.js";
+import { updateStreak } from "../utils/streakUtils.js";
+
+const today = () => new Date().toISOString().split("T")[0];
+
+/**
+ * POST /api/water/add
+ */
+export const addWater = async (req, res) => {
+  try {
+    const { amount } = req.body; // ml
+
+    let log = await DailyLog.findOne({
+      user: req.user._id,
+      date: today()
+    });
+
+    if (!log) {
+      log = await DailyLog.create({
+        user: req.user._id,
+        date: today(),
+        meals: { breakfast: [], lunch: [], snacks: [], dinner: [] }
+      });
+    }
+
+    log.waterConsumed += amount;
+    await log.save();
+
+    const user = await User.findById(req.user._id);
+    updateStreak(user);
+    await user.save();
+
+    res.json({
+      waterConsumed: log.waterConsumed,
+      waterGoal: user.waterGoal,
+      streak: user.streak
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+--- END OF FILE: backend\src\controllers\water.controller.js ---
+
+--- START OF FILE: backend\src\middleware\auth.middleware.js ---
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
+
+export const protect = async (req, res, next) => {
+  let token;
+
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer ")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+
+  if (!token) {
+    return res.status(401).json({ message: "Not authorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = await User.findById(decoded.id).select("-password");
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: "Token failed" });
+  }
+};
+
+--- END OF FILE: backend\src\middleware\auth.middleware.js ---
+
+--- START OF FILE: backend\src\models\DailyLog.js ---
+import mongoose from "mongoose";
+
+const mealItemSchema = new mongoose.Schema(
+  {
+    ingredient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Ingredient",
+      required: true
+    },
+    quantity: {type: Number, required: true},
+    unit: {type: String, required: true},
+    normalizedQuantity: {
+      type: Number,
+      required: true
+    },
+    calories: Number,
+    protein: Number,
+    carbs: Number,
+    fats: Number
+  }
+
+);
+
+const dailyLogSchema = new mongoose.Schema(
+  {
+    user: {type: mongoose.Schema.Types.ObjectId, ref: "User", required: true},
+    date: {type: String, required: true},
+
+    foodItems: [{
+      ingredient: { type: mongoose.Schema.Types.ObjectId, ref: "Ingredient" },
+      quantity: Number,
+      unit: String,
+      calories: Number,
+      protein: Number,
+      carbs: Number,
+      fats: Number,
+      
+      // 🔥 The Magic Field
+      loggedAt: { type: Date, default: Date.now }, 
+      
+      // Optional: Keep a label just in case user wants to tag it manually later
+      label: { type: String, default: "General" } 
+    }],
+
+    totalCalories: {
+      type: Number,
+      default: 0
+    },
+
+    totalProtein: {
+      type: Number,
+      default: 0
+    },
+
+    totalCarbs: {
+      type: Number,
+      default: 0
+    },
+
+    totalFats: {
+      type: Number,
+      default: 0
+    },
+
+    waterConsumed: {
+      type: Number,
+      default: 0 // ml
+    },
+
+    suggestions: {
+      type: [String],
+      default: []
+    }
+  },
+  { timestamps: true }
+);
+
+/* Ensure one log per user per day */
+dailyLogSchema.index({ user: 1, date: 1 }, { unique: true });
+
+export default mongoose.model("DailyLog", dailyLogSchema);
+
+--- END OF FILE: backend\src\models\DailyLog.js ---
+
+--- START OF FILE: backend\src\models\Ingredient.js ---
+import mongoose from "mongoose";
+
+const ingredientSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true
+    },
+
+    category: {
+      type: String,
+      enum: [
+        "millets",
+        "grains",
+        "legumes",
+        "dairy",
+        "vegetables",
+        "fruits",
+        "nuts_seeds",
+        "oils_fats",
+        "meat",
+        "eggs",
+        "processed",
+        "other"
+      ],
+      required: true
+    },
+
+    caloriesPer100g: {type: Number, required: true},
+    protein: {type: Number, required: true},
+    carbs: {type: Number, required: true},
+    fats: {type: Number, required: true},
+
+    unitType: {
+      type: String,
+      enum: ["gram", "tbsp", "piece", "solid", "liquid"],
+      default: "gram",
+      required: true
+    },
+
+    baseUnit: {
+      type: String,
+      enum: ["g", "ml"],
+      required: true
+    },
+
+    tags: {
+      isVeg: { type: Boolean, default: true },
+      isEgg: { type: Boolean, default: false },
+      isVegan: { type: Boolean, default: false },
+      isJain: { type: Boolean, default: true }
+    },
+
+    allergens: {
+      type: [String],
+      enum: ["nuts", "lactose"],
+      default: []
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null // null = Global Item (Visible to everyone)
+    }
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("Ingredient", ingredientSchema);
+
+--- END OF FILE: backend\src\models\Ingredient.js ---
+
+--- START OF FILE: backend\src\models\User.js ---
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true
+    },
+
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+      select: false // very important for security
+    },
+
+    age: {
+      type: Number,
+      required: true
+    },
+
+    gender: {
+      type: String,
+      enum: ["male", "female"],
+      required: true
+    },
+
+    height: {
+      type: Number, // cm
+      required: true
+    },
+
+    weight: {
+      type: Number, // kg
+      required: true
+    },
+
+    activityLevel: {
+      type: String,
+      enum: ["sedentary", "light", "moderate", "heavy"],
+      required: true
+    },
+
+    goal: {
+      type: String,
+      enum: ["fat_loss", "maintenance", "muscle_gain"],
+      required: true
+    },
+
+    dietType: {
+      type: String,
+      enum: ["veg", "eggetarian", "non_veg", "vegan", "jain"],
+      required: true
+    },
+
+    allergies: {
+      type: [String],
+      enum: ["nuts", "lactose"],
+      default: []
+    },
+
+    dailyCalorieLimit: {
+      type: Number,
+      required: true
+    },
+
+    waterGoal: {
+      type: Number, // ml
+      default: function () {
+        return Math.round(this.weight * 35);
+      }
+    },
+
+    streak: {
+      current: {
+        type: Number,
+        default: 0
+      },
+      longest: {
+        type: Number,
+        default: 0
+      },
+      lastActiveDate: {
+        type: Date
+      }
+    }
+  },
+  { timestamps: true }
+);
+
+/* Hash password before save */
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+/* Compare password method */
+userSchema.methods.comparePassword = function (enteredPassword) {
+  return bcrypt.compare(enteredPassword, this.password);
+};
+
+export default mongoose.model("User", userSchema);
+
+--- END OF FILE: backend\src\models\User.js ---
+
+--- START OF FILE: backend\src\routes\auth.routes.js ---
+import express from "express";
+import { registerUser, loginUser } from "../controllers/auth.controller.js";
+
+const router = express.Router();
+
+router.post("/register", registerUser);
+router.post("/login", loginUser);
+
+export default router;
+
+--- END OF FILE: backend\src\routes\auth.routes.js ---
+
+--- START OF FILE: backend\src\routes\food.routes.js ---
+import express from "express";
+import {
+  getIngredients,
+  createIngredient,
+  updateIngredientCategory,
+  getRecentFoods
+} from "../controllers/food.controller.js";
+import { protect } from "../middleware/auth.middleware.js";
+const router = express.Router();
+
+/* Protected route */
+router.get("/recents", protect, getRecentFoods);
+
+router.get("/ingredients", protect, getIngredients);
+
+router.post("/ingredients", protect, createIngredient);
+
+router.patch("/ingredients/:id", protect, updateIngredientCategory);
+
+export default router;
+
+--- END OF FILE: backend\src\routes\food.routes.js ---
+
+--- START OF FILE: backend\src\routes\log.routes.js ---
+import express from "express";
+import { 
+  getTodayLog, 
+  addFoodItem,      // Changed from addMealItem
+  updateFoodItem,   // Changed from updateMealItem
+  removeFoodItem,   // Changed from removeMealItem
+  updateWater,
+  getTodayCategoryStats
+} from "../controllers/log.controller.js";
+import { protect } from "../middleware/auth.middleware.js";
+
+const router = express.Router();
+
+router.get("/today", protect, getTodayLog);
+
+router.post("/add-item", protect, addFoodItem); 
+
+router.put("/update-item", protect, updateFoodItem); 
+
+router.post("/remove-item", protect, removeFoodItem);
+
+router.patch("/water", protect, updateWater);
+
+router.get("/stats", protect, getTodayCategoryStats);
+
+export default router;
+--- END OF FILE: backend\src\routes\log.routes.js ---
+
+--- START OF FILE: backend\src\routes\stats.routes.js ---
+
+--- END OF FILE: backend\src\routes\stats.routes.js ---
+
+--- START OF FILE: backend\src\routes\user.routes.js ---
+
+--- END OF FILE: backend\src\routes\user.routes.js ---
+
+--- START OF FILE: backend\src\routes\water.routes.js ---
+import express from "express";
+import { addWater } from "../controllers/water.controller.js";
+import { protect } from "../middleware/auth.middleware.js";
+
+const router = express.Router();
+
+router.post("/add", protect, addWater);
+
+export default router;
+
+--- END OF FILE: backend\src\routes\water.routes.js ---
+
+--- START OF FILE: backend\src\seeds\ingredients.seed.js ---
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import Ingredient from "../models/Ingredient.js";
+
+dotenv.config();
+
+const ingredients = [
+  // 🌾 Grains
+  {
+    name: "rice",
+    category: "grains",
+    caloriesPer100g: 130,
+    protein: 2.7,
+    carbs: 28,
+    fats: 0.3,
+    unitType: "gram",
+    tags: { isVeg: true, isVegan: true, isJain: true }
+  },
+  {
+    name: "wheat roti",
+    category: "grains",
+    caloriesPer100g: 297,
+    protein: 9,
+    carbs: 55,
+    fats: 4,
+    unitType: "gram",
+    tags: { isVeg: true, isVegan: true, isJain: true }
+  },
+
+  // 🫘 Legumes
+  {
+    name: "dal",
+    category: "legumes",
+    caloriesPer100g: 116,
+    protein: 9,
+    carbs: 20,
+    fats: 0.4,
+    unitType: "gram",
+    tags: { isVeg: true, isVegan: true, isJain: true }
+  },
+
+  // 🥛 Dairy
+  {
+    name: "paneer",
+    category: "dairy",
+    caloriesPer100g: 265,
+    protein: 18,
+    carbs: 1.2,
+    fats: 20,
+    unitType: "gram",
+    tags: { isVeg: true, isVegan: false, isJain: true },
+    allergens: ["lactose"]
+  },
+  {
+    name: "curd",
+    category: "dairy",
+    caloriesPer100g: 98,
+    protein: 11,
+    carbs: 3.4,
+    fats: 4.3,
+    unitType: "gram",
+    tags: { isVeg: true, isVegan: false, isJain: true },
+    allergens: ["lactose"]
+  },
+
+  // 🥚 Eggs
+  {
+    name: "egg",
+    category: "eggs",
+    caloriesPer100g: 155,
+    protein: 13,
+    carbs: 1.1,
+    fats: 11,
+    unitType: "piece",
+    tags: { isVeg: false, isEgg: true, isVegan: false, isJain: false }
+  },
+
+  // 🍗 Meat
+  {
+    name: "chicken breast",
+    category: "meat",
+    caloriesPer100g: 165,
+    protein: 31,
+    carbs: 0,
+    fats: 3.6,
+    unitType: "gram",
+    tags: { isVeg: false, isVegan: false, isJain: false }
+  },
+
+  // 🧈 Oils & Fats
+  {
+    name: "oil",
+    category: "oils_fats",
+    caloriesPer100g: 884,
+    protein: 0,
+    carbs: 0,
+    fats: 100,
+    unitType: "tbsp",
+    tags: { isVeg: true, isVegan: true, isJain: true }
+  },
+  {
+    name: "ghee",
+    category: "oils_fats",
+    caloriesPer100g: 900,
+    protein: 0,
+    carbs: 0,
+    fats: 100,
+    unitType: "tbsp",
+    tags: { isVeg: true, isVegan: false, isJain: true },
+    allergens: ["lactose"]
+  }
+];
+
+const deriveBaseUnit = (unitType) =>
+  unitType === "liquid" ? "ml" : "g";
+
+const seedIngredients = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+
+    await Ingredient.deleteMany();
+
+    const normalizedIngredients = ingredients.map((ing) => ({
+      ...ing,
+      baseUnit: deriveBaseUnit(ing.unitType)
+    }));
+
+    await Ingredient.insertMany(normalizedIngredients);
+
+    console.log("✅ Ingredients seeded successfully");
+    process.exit();
+  } catch (error) {
+    console.error("❌ Seeding failed:", error.message);
+    process.exit(1);
+  }
+};
+
+seedIngredients();
+
+--- END OF FILE: backend\src\seeds\ingredients.seed.js ---
+
+--- START OF FILE: backend\src\server.js ---
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION 💥");
+  console.error(err.stack);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED PROMISE 💥");
+  console.error(err.stack);
+  process.exit(1);
+});
+
+import loadEnv from "./config/env.js";
+import connectDB from "./config/db.js";
+import app from "./app.js";
+
+loadEnv();
+connectDB();
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`🔥 Server running on port ${PORT}`);
+});
+
+--- END OF FILE: backend\src\server.js ---
+
+--- START OF FILE: backend\src\services\usda.service.js ---
+import axios from "axios";
+
+const USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1";
+
+export const searchUSDAFoods = async (query) => {
+  const res = await axios.get(`${USDA_BASE_URL}/foods/search`, {
+    params: {
+      api_key: process.env.USDA_API_KEY,
+      query,
+      pageSize: 10
+    }
+  });
+
+  return res.data.foods || [];
+};
+
+--- END OF FILE: backend\src\services\usda.service.js ---
+
+--- START OF FILE: backend\src\utils\calorieCalculator.js ---
+export const calculateDailyCalories = ({
+  age,
+  gender,
+  height,
+  weight,
+  activityLevel,
+  goal
+}) => {
+  let bmr;
+
+  if (gender === "male") {
+    bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+  } else {
+    bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+  }
+
+  const activityMap = {
+    sedentary: 1.2,
+    light: 1.375,
+    moderate: 1.55,
+    heavy: 1.725
+  };
+
+  let tdee = bmr * activityMap[activityLevel];
+
+  if (goal === "fat_loss") return Math.round(tdee - 500);
+  if (goal === "muscle_gain") return Math.round(tdee + 400);
+
+  return Math.round(tdee);
+};
+
+--- END OF FILE: backend\src\utils\calorieCalculator.js ---
+
+--- START OF FILE: backend\src\utils\categoryAnalytics.js ---
+export const calculateCategoryTotals = (log) => {
+  const categoryTotals = {};
+
+  Object.values(log.meals).forEach((mealArr) => {
+    mealArr.forEach((item) => {
+      const category = item.ingredient.category || "uncategorized";
+
+      if (!categoryTotals[category]) {
+        categoryTotals[category] = {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fats: 0
+        };
+      }
+
+      categoryTotals[category].calories += item.calories || 0;
+      categoryTotals[category].protein += item.protein || 0;
+      categoryTotals[category].carbs += item.carbs || 0;
+      categoryTotals[category].fats += item.fats || 0;
+    });
+  });
+
+  return categoryTotals;
+};
+
+--- END OF FILE: backend\src\utils\categoryAnalytics.js ---
+
+--- START OF FILE: backend\src\utils\dateUtils.js ---
+
+--- END OF FILE: backend\src\utils\dateUtils.js ---
+
+--- START OF FILE: backend\src\utils\generateToken.js ---
+import jwt from "jsonwebtoken";
+
+export const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "7d"
+  });
+};
+
+--- END OF FILE: backend\src\utils\generateToken.js ---
+
+--- START OF FILE: backend\src\utils\logCalculator.js ---
+export const calculateMealValues = (ingredient, quantity) => {
+  const factor = quantity / 100;
+
+  return {
+    calories: +(ingredient.caloriesPer100g * factor).toFixed(2),
+    protein: +(ingredient.protein * factor).toFixed(2),
+    carbs: +(ingredient.carbs * factor).toFixed(2),
+    fats: +(ingredient.fats * factor).toFixed(2)
+  };
+};
+
+--- END OF FILE: backend\src\utils\logCalculator.js ---
+
+--- START OF FILE: backend\src\utils\streakUtils.js ---
+import User from "../models/User.js";
+
+export const updateStreak = async (userId) => {
+  const user = await User.findById(userId);
+
+  if (!user) return;
+
+  // 🔥 Ensure streak object exists
+  if (!user.streak) {
+    user.streak = {
+      current: 0,
+      longest: 0,
+      lastActiveDate: null
+    };
+  }
+
+  const today = new Date().toDateString();
+  const lastActive = user.streak.lastActiveDate
+    ? user.streak.lastActiveDate.toDateString()
+    : null;
+
+  if (lastActive === today) {
+    // already updated today
+    return;
+  }
+
+  if (
+    lastActive &&
+    new Date(today) - new Date(lastActive) === 86400000
+  ) {
+    user.streak.current += 1;
+  } else {
+    user.streak.current = 1;
+  }
+
+  user.streak.longest = Math.max(
+    user.streak.longest,
+    user.streak.current
+  );
+
+  user.streak.lastActiveDate = new Date();
+
+  await user.save();
+};
+
+--- END OF FILE: backend\src\utils\streakUtils.js ---
+
+--- START OF FILE: backend\src\utils\suggestionEngine.js ---
+export const generateSuggestions = (log, user) => {
+  const suggestions = [];
+
+  const calorieLimit = user.dailyCalorieLimit;
+  const caloriesConsumed = log.totalCalories;
+
+  /* 🔥 Calorie-based suggestions */
+  if (caloriesConsumed < 0.4 * calorieLimit) {
+    suggestions.push(
+      "You have consumed very few calories so far. Consider adding a balanced meal."
+    );
+  }
+
+  if (caloriesConsumed > calorieLimit) {
+    suggestions.push(
+      "You have exceeded your daily calorie limit. Try to keep dinner lighter."
+    );
+  }
+
+  /* 🍳 Breakfast importance (scientifically supported) */
+  const breakfastCalories = log.meals.breakfast.reduce(
+    (sum, item) => sum + item.calories,
+    0
+  );
+
+  if (breakfastCalories > 0 && breakfastCalories < 0.25 * calorieLimit) {
+    suggestions.push(
+      "Your breakfast calories are low. A stronger breakfast can improve energy levels."
+    );
+  }
+
+  /* 🥩 Protein logic (0.8–1g/kg standard) */
+  const minProtein = 0.8 * user.weight;
+
+  if (log.totalProtein < minProtein) {
+    if (user.dietType === "veg") {
+      suggestions.push(
+        "Your protein intake is low. Add paneer, curd, dal, or soy-based foods."
+      );
+    } else if (user.dietType === "eggetarian") {
+      suggestions.push(
+        "Your protein intake is low. Eggs and dairy can help meet your protein needs."
+      );
+    } else if (user.dietType === "vegan") {
+      suggestions.push(
+        "Your protein intake is low. Consider tofu, lentils, chickpeas, or soy."
+      );
+    } else {
+      suggestions.push(
+        "Your protein intake is low. Lean meats, eggs, or dairy can help."
+      );
+    }
+  }
+
+  /* 💧 Water reminder */
+  if (log.waterConsumed < 0.6 * user.waterGoal) {
+    suggestions.push(
+      "Your water intake is low today. Staying hydrated improves digestion and recovery."
+    );
+  }
+
+  /* 🌙 Late-day calorie distribution (future-safe rule) */
+  if (
+    caloriesConsumed > 0.8 * calorieLimit &&
+    log.meals.dinner.length === 0
+  ) {
+    suggestions.push(
+      "You have already consumed most of your calories. Keep dinner light."
+    );
+  }
+
+  return suggestions;
+};
+
+--- END OF FILE: backend\src\utils\suggestionEngine.js ---
+
+--- START OF FILE: backend\src\utils\unitConverter.js ---
+export const convertToBaseUnit = (quantity, unit, ingredient) => {
+  if (ingredient.unitType === "piece" && (unit === "piece" || unit === "pc")) {
+      return quantity * 100;
+  }
+  const conversions = {
+    g: 1,
+    kg: 1000,
+    ml: 1,
+    l: 1000,
+    cup: ingredient.unitType === "liquid" ? 240 : 120,
+    tbsp: ingredient.unitType === "liquid" ? 15 : 10,
+    
+  };
+
+  const safeUnit = unit && conversions[unit] ? unit : ingredient.baseUnit;
+  return quantity * conversions[safeUnit];
+};
+
+--- END OF FILE: backend\src\utils\unitConverter.js ---
+
+--- START OF FILE: frontend\src\api\axios.js ---
+import axios from "axios";
+
+const api = axios.create({
+  baseURL: "http://localhost:5000/api",
+});
+
+api.interceptors.request.use((req) => {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    req.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return req;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.warn("Session expired. Logging out.");
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
+
+export default api;
+
+--- END OF FILE: frontend\src\api\axios.js ---
+
+--- START OF FILE: frontend\src\App.jsx ---
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+function App() {
+  const { user } = useAuth();
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {!user ? (
+          <>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<Navigate to="/login" />} />
+          </>
+        ) : (
+          <>
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/dashboard" />} />
+          </>
+        )}
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+
+--- END OF FILE: frontend\src\App.jsx ---
+
+--- START OF FILE: frontend\src\components\AddMeal.jsx ---
+import { useState, useEffect } from "react";
+import api from "../api/axios";
+import CreateFoodModal from "./CreateFoodModal"; // Make sure this file exists
+import CreateRecipeModal from "./CreateRecipeModal";
+
+// --- UX CONSTANTS ---
+const UNIT_LABELS = {
+  g: "grams",
+  ml: "ml",
+  piece: "pc",
+  tbsp: "tbsp",
+  cup: "cup"
+};
+
+const CATEGORIES = [
+  { label: "🕒 Recent", value: "recent" }, 
+  { label: "All", value: "" },
+  { label: "🌾 Grains", value: "grains" },
+  { label: "🥦 Veg", value: "vegetables" },
+  { label: "🍎 Fruit", value: "fruits" },
+  { label: "🥛 Dairy", value: "dairy" },
+  { label: "🥚 Protein", value: "meat" }, 
+];
+
+function AddMeal({ mealType, onAdded }) {
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState(""); 
+  const [results, setResults] = useState([]);
+  const [recents, setRecents] = useState([]); 
+  const [loading, setLoading] = useState(false);
+
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [quantity, setQuantity] = useState("");
+  const [unit, setUnit] = useState("g");
+  
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
+  // 🔥 New State for the Modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+
+  // 1. Load recents on mount
+  useEffect(() => {
+    api.get("/food/recents")
+       .then(res => setRecents(res.data || []))
+       .catch(console.error);
+  }, []);
+
+  // 2. Debounce Search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // 3. Search API
+  useEffect(() => {
+    if (category === "recent") return;
+
+    if (!debouncedSearch) {
+      setResults([]);
+      return;
+    }
+
+    setLoading(true);
+    const controller = new AbortController();
+
+    api.get("/food/ingredients", {
+        params: { search: debouncedSearch, category },
+        signal: controller.signal
+    })
+    .then(res => {
+        const map = new Map();
+        (res.data.items || []).forEach(item => {
+           if (!map.has(item.name)) map.set(item.name, item);
+        });
+        setResults(Array.from(map.values()));
+    })
+    .catch(err => {
+        if (err.name !== "CanceledError") console.error(err);
+    })
+    .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, [debouncedSearch, category]);
+
+
+  // --- HANDLERS ---
+
+  const handleAdd = async () => {
+    if (!selectedItem) return;
+    if (!quantity) return alert("Enter quantity");
+
+    try {
+        let ingId = selectedItem._id;
+        
+        // If it's a raw USDA item (no ID), create it in DB first
+        if (!ingId) {
+             const createRes = await api.post("/food/ingredients", {
+                 ...selectedItem,
+                 category: selectedItem.category || "processed"
+             });
+             ingId = createRes.data._id;
+        }
+
+        await api.post("/log/add-meal", {
+            ingredientId: ingId,
+            quantity: Number(quantity),
+            time: new Date().toISOString(),
+            unit
+        });
+
+        onAdded();
+        
+        // Reset UI
+        setQuantity("");
+        setSearch("");
+        setSelectedItem(null);
+        // Refresh recents quietly
+        api.get("/food/recents").then(res => setRecents(res.data || []));
+
+    } catch (err) {
+        alert("Failed to add item");
+    }
+  };
+
+  // 🔥 Handler: Called when user successfully creates a new food in the modal
+  const handleCustomFoodCreated = (newItem) => {
+    setSelectedItem(newItem);
+    setUnit(newItem.unitType === "piece" ? "piece" : newItem.baseUnit || "g");
+    setQuantity(newItem.unitType === "piece" ? "1" : "100");
+    setShowCreateModal(false);
+    setShowRecipeModal(false);
+  };
+
+  // --- VIEW LOGIC ---
+  let displayItems = [];
+  let showEmptyState = false;
+
+  if (category === "recent") {
+    displayItems = search 
+      ? recents.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+      : recents;
+      
+    if (displayItems.length === 0) showEmptyState = true;
+  } else {
+      if (debouncedSearch) {
+          displayItems = results;
+          if (results.length === 0 && !loading) showEmptyState = true;
+      } else {
+          displayItems = [];
+      }
+  }
+
+  return (
+    <div style={{ background: "#fff", padding: "15px", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+      
+      <div style={{ marginBottom: "15px", display: "flex", gap: "10px" }}>
+        <button 
+            onClick={() => setShowCreateModal(true)}
+            style={{
+                flex: 1, padding: "10px", borderRadius: "8px", border: "1px dashed #2563eb", 
+                background: "#eff6ff", color: "#2563eb", fontWeight: "600", cursor: "pointer", fontSize: "13px",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "6px"
+            }}
+        >
+            <span>✏️</span> + Add New Food Item
+        </button>
+        <button
+            type="button"
+            onClick={() => {console.log("Recipe Button Clicked!");
+                setShowRecipeModal(true)
+            }}
+            style={{
+                flex: 1, padding: "10px", borderRadius: "8px", border: "1px dashed #7c3aed", 
+                background: "#f5f3ff", color: "#7c3aed", fontWeight: "600", cursor: "pointer", fontSize: "13px",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "6px"
+            }}
+        >
+            <span>👨‍🍳</span> Create Your Recipe
+        </button>
+      </div>
+      {/* Search Bar */}
+      <div style={{ position: "relative", marginBottom: "12px" }}>
+        <input
+            type="text"
+            placeholder={category === "recent" ? "Filter recent items..." : `Search food`}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+                width: "100%",
+                padding: "12px 12px 12px 40px",
+                borderRadius: "8px",
+                border: "1px solid #e5e7eb",
+                fontSize: "16px",
+                outline: "none",
+                background: "#f9fafb"
+            }}
+        />
+        <span style={{ position: "absolute", left: "12px", top: "12px", fontSize: "16px" }}>🔍</span>
+      </div>
+
+      {/* Category Tabs */}
+      <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "10px", marginBottom: "5px" }}>
+        {CATEGORIES.map(cat => (
+            <button
+                key={cat.value}
+                onClick={() => {
+                    setCategory(cat.value);
+                    setSelectedItem(null);
+                }}
+                style={{
+                    padding: "6px 12px",
+                    borderRadius: "20px",
+                    border: "none",
+                    whiteSpace: "nowrap",
+                    fontSize: "13px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    background: category === cat.value ? "#2563eb" : "#f3f4f6",
+                    color: category === cat.value ? "#fff" : "#4b5563",
+                    transition: "all 0.2s"
+                }}
+            >
+                {cat.label}
+            </button>
+        ))}
+      </div>
+
+      {/* Results Area */}
+      <div style={{ minHeight: "100px", maxHeight: "250px", overflowY: "auto" }}>
+        
+        {loading && <div style={{ textAlign: "center", padding: "20px", color: "#6b7280" }}>🌀 Searching...</div>}
+
+        {/* 1. Start State */}
+        {!loading && !search && category !== "recent" && (
+            <div style={{ textAlign: "center", padding: "30px", color: "#9ca3af" }}>
+                <span style={{ fontSize: "24px", display: "block", marginBottom: "8px" }}>🥗</span>
+                Start typing to find food
+            </div>
+        )}
+
+        {/* 2. Empty State & CREATE BUTTON */}
+        {!loading && showEmptyState && (
+            <div style={{ textAlign: "center", padding: "20px", color: "#9ca3af" }}>
+                {category === "recent" ? (
+                    "No recent items found."
+                ) : (
+                    <>
+                        <p style={{ marginBottom: "12px" }}>No results found for "<strong>{search}</strong>"</p>
+                        {/* 🔥 The "Create New" Button */}
+                        <button 
+                            onClick={() => setShowCreateModal(true)}
+                            style={{
+                                background: "#10b981", 
+                                color: "white", 
+                                border: "none", 
+                                padding: "8px 16px", 
+                                borderRadius: "20px", 
+                                cursor: "pointer", 
+                                fontWeight: "600",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px"
+                            }}
+                        >
+                            <span>+</span> Create "{search}"
+                        </button>
+                    </>
+                )}
+            </div>
+        )}
+
+        {/* 3. List Items */}
+        {!loading && displayItems.map((item, idx) => {
+            const isSelected = selectedItem && (selectedItem._id === item._id || selectedItem.name === item.name);
+
+            return (
+                <div 
+                    key={item._id || idx}
+                    onClick={() => {
+                        setSelectedItem(item);
+                        setUnit(item.baseUnit || "g");
+                    }}
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        marginBottom: "6px",
+                        cursor: "pointer",
+                        background: isSelected ? "#eff6ff" : "transparent",
+                        border: isSelected ? "1px solid #bfdbfe" : "1px solid transparent"
+                    }}
+                >
+                    <div>
+                        <div style={{ fontWeight: "600", color: "#1f2937" }}>
+                            {item.name} 
+                            {!item._id && <span style={{fontSize: "10px", background:"#e5e7eb", padding:"2px 4px", borderRadius:"4px", marginLeft:"6px"}}>Global</span>}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                            {item.caloriesPer100g} kcal/100g • {item.protein}p • {item.carbs}c • {item.fats}f
+                        </div>
+                    </div>
+                    {isSelected && <span style={{ color: "#2563eb", fontWeight: "bold" }}>✓</span>}
+                </div>
+            );
+        })}
+      </div>
+
+      {/* Action Bar */}
+      {selectedItem && (
+          <div style={{ 
+              marginTop: "15px", 
+              paddingTop: "15px", 
+              borderTop: "1px solid #e5e7eb",
+              display: "flex",
+              gap: "10px",
+              alignItems: "center"
+          }}>
+              <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: "12px", fontWeight: "600", color: "#374151", display: "block", marginBottom: "4px" }}>Quantity</label>
+                  <div style={{ display: "flex", gap: "5px" }}>
+                    <input 
+                        type="number" 
+                        value={quantity}
+                        onChange={e => setQuantity(e.target.value)}
+                        placeholder="0"
+                        autoFocus
+                        style={{ 
+                            width: "100%", 
+                            padding: "8px", 
+                            borderRadius: "6px", 
+                            border: "1px solid #d1d5db" 
+                        }} 
+                    />
+                    <select 
+                        value={unit} 
+                        onChange={e => setUnit(e.target.value)}
+                        style={{ padding: "8px", borderRadius: "6px", border: "1px solid #d1d5db", background: "#f9fafb" }}
+                    >
+                        {Object.keys(UNIT_LABELS).map(k => <option key={k} value={k}>{UNIT_LABELS[k]}</option>)}
+                    </select>
+                  </div>
+              </div>
+
+              <button 
+                  onClick={handleAdd}
+                  style={{
+                      height: "42px",
+                      padding: "0 20px",
+                      background: "#2563eb",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      marginTop: "18px",
+                      boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)"
+                  }}
+              >
+                  Add +
+              </button>
+          </div>
+      )}
+
+      {/* 🔥 Render the Modal if State is True */}
+      {showCreateModal && (
+          <CreateFoodModal 
+              initialName={search} 
+              onClose={() => setShowCreateModal(false)} 
+              onSuccess={handleCustomFoodCreated} 
+          />
+      )}
+
+      {showRecipeModal && (
+          <CreateRecipeModal 
+              onClose={() => setShowRecipeModal(false)} 
+              onSuccess={handleCustomFoodCreated} 
+          />
+      )}
+
+    </div>
+  );
+}
+
+export default AddMeal;
+--- END OF FILE: frontend\src\components\AddMeal.jsx ---
+
+--- START OF FILE: frontend\src\components\CalorieDonut.jsx ---
+import React from "react";
+
+const CalorieDonut = ({ log, goal }) => {
+  // 1. Get Values
+  const proteinGrams = log.totalProtein || 0;
+  const carbsGrams = log.totalCarbs || 0;
+  const fatsGrams = log.totalFats || 0;
+  const totalCalories = log.totalCalories || 0;
+  
+  const safeGoal = goal || 2000; 
+
+  // 2. Convert Macros to Calories
+  const calsFromProtein = proteinGrams * 4;
+  const calsFromCarbs = carbsGrams * 4;
+  const calsFromFats = fatsGrams * 9;
+
+  // 3. SVG Configuration
+  const size = 280;
+  const strokeWidth = 24;
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  // 4. Calculate Segment Percentages
+  // We clamp the visual total to 100% so the chart doesn't break if you overeat
+  // (Optional: You can remove Math.min if you want it to loop overlap)
+  const pPct = calsFromProtein / safeGoal;
+  const cPct = calsFromCarbs / safeGoal;
+  const fPct = calsFromFats / safeGoal;
+
+  // 5. CORRECTED STACKING LOGIC
+  // We layer them: Bottom (Largest Sum) -> Top (Smallest)
+  
+  // Layer 1 (Bottom - Orange): Represents P + C + F
+  // The visible part will be just 'F' because P+C is covered by the blue layer.
+  const fOffset = circumference - ((pPct + cPct + fPct) * circumference);
+  
+  // Layer 2 (Middle - Blue): Represents P + C
+  // The visible part will be just 'C' because P is covered by the purple layer.
+  const cOffset = circumference - ((pPct + cPct) * circumference);
+  
+  // Layer 3 (Top - Purple): Represents P
+  // This is fully visible starting from 0.
+  const pOffset = circumference - (pPct * circumference);
+
+  return (
+    <div style={{
+      background: "white",
+      padding: "24px",
+      borderRadius: "24px",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.04)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      position: "relative"
+    }}>
+        <h3 style={{ margin: "0 0 20px 0", color: "#334155", alignSelf: "flex-start", fontSize: "18px" }}>
+            Daily Energy
+        </h3>
+
+        <div style={{ position: "relative", width: size, height: size }}>
+            {/* CENTER TEXT */}
+            <div style={{
+                position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+                display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center"
+            }}>
+                <span style={{ fontSize: "14px", color: "#94a3b8", fontWeight: "600", marginBottom: "4px" }}>Consumed</span>
+                <span style={{ fontSize: "42px", fontWeight: "800", color: "#0f172a", lineHeight: "1" }}>
+                    {Math.round(totalCalories)}
+                </span>
+                <div style={{ width: "40px", height: "2px", background: "#e2e8f0", margin: "8px 0" }}></div>
+                <span style={{ fontSize: "16px", color: "#64748b", fontWeight: "600" }}>
+                     of {safeGoal} kcal
+                </span>
+            </div>
+
+            {/* SVG CHART */}
+            <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+                {/* 1. Track Background (Light Grey Full Circle) */}
+                <circle
+                    cx={center} cy={center} r={radius}
+                    fill="none" stroke="#f1f5f9" strokeWidth={strokeWidth}
+                />
+
+                {/* 2. FATS Segment (Orange) - BOTTOM LAYER */}
+                {/* Represents Total (P+C+F) */}
+                <circle
+                    cx={center} cy={center} r={radius}
+                    fill="none" stroke="#fb923c" strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={fOffset}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 1s ease" }}
+                />
+
+                {/* 3. CARBS Segment (Blue) - MIDDLE LAYER */}
+                {/* Represents (P+C) */}
+                <circle
+                    cx={center} cy={center} r={radius}
+                    fill="none" stroke="#60a5fa" strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={cOffset}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 1s ease" }}
+                />
+
+                {/* 4. PROTEIN Segment (Purple) - TOP LAYER */}
+                {/* Represents (P) */}
+                <circle
+                    cx={center} cy={center} r={radius}
+                    fill="none" stroke="#a78bfa" strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={pOffset}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 1s ease" }}
+                />
+            </svg>
+        </div>
+
+        {/* LEGEND ROW */}
+        <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "1fr 1fr 1fr", 
+            gap: "12px", 
+            width: "100%", 
+            marginTop: "24px" 
+        }}>
+            <MacroCard 
+                label="Protein" 
+                color="#a78bfa" 
+                amount={proteinGrams} 
+                cals={calsFromProtein} 
+            />
+            <MacroCard 
+                label="Carbs" 
+                color="#60a5fa" 
+                amount={carbsGrams} 
+                cals={calsFromCarbs} 
+            />
+            <MacroCard 
+                label="Fats" 
+                color="#fb923c" 
+                amount={fatsGrams} 
+                cals={calsFromFats} 
+            />
+        </div>
+    </div>
+  );
+};
+
+// Sub-component for the legend cards
+const MacroCard = ({ label, color, amount, cals }) => (
+    <div style={{ 
+        background: "#f8fafc", 
+        padding: "12px", 
+        borderRadius: "12px", 
+        display: "flex", 
+        flexDirection: "column", 
+        alignItems: "center",
+        border: "1px solid #e2e8f0"
+    }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }}></div>
+            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600" }}>{label}</span>
+        </div>
+        <span style={{ fontSize: "16px", fontWeight: "700", color: "#334155" }}>{Math.round(amount)}g</span>
+        <span style={{ fontSize: "10px", color: "#94a3b8" }}>{Math.round(cals)} kcal</span>
+    </div>
+);
+
+export default CalorieDonut;
+--- END OF FILE: frontend\src\components\CalorieDonut.jsx ---
+
+--- START OF FILE: frontend\src\components\CreateFoodModal.jsx ---
+import { useState } from "react";
+import api from "../api/axios";
+
+const CreateFoodModal = ({ onClose, onSuccess, initialName }) => {
+    const [measureMode, setMeasureMode] = useState("solid");
+    const [form, setForm] = useState({
+    name: initialName || "",
+    calories: "",
+    protein: "",
+    carbs: "",
+    fats: "",
+    category: "other",
+    unit: "g" // Default to grams for simplicity
+  });
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Create the custom ingredient
+      // Note: We treat user input as "Per 100g" or "Per 1 Serving" depending on your logic.
+      // For simplicity, let's assume user enters data "Per 100g/ml" or "Per Serving"
+      // You might want to add a field "servingSize" later. 
+      const res = await api.post("/food/ingredients", {
+        name: form.name,
+        caloriesPer100g: Number(form.calories),
+        protein: Number(form.protein),
+        carbs: Number(form.carbs),
+        fats: Number(form.fats),
+        category: form.category,
+        unitType: "gram" // Defaulting to gram-based math
+      });
+      
+      onSuccess(res.data); // Pass back the new item to auto-select it
+    } catch (err) {
+      alert("Failed to create food");
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+      background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000
+    }}>
+      <div style={{ background: "white", padding: "24px", borderRadius: "16px", width: "90%", maxWidth: "400px" }}>
+        <h3 style={{ marginTop: 0 }}>Create Custom Food</h3>
+        
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          
+          <input name="name" placeholder="Food Name (e.g. My Protein Shake)" value={form.name} onChange={handleChange} required style={inputStyle} />
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            <input type="number" name="calories" placeholder="Calories (kcal)" value={form.calories} onChange={handleChange} required style={inputStyle} />
+            <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
+                <option value="other">Other</option>
+                <option value="processed">Packaged/Processed</option>
+                <option value="grains">Grains/Bread</option>
+                <option value="dairy">Dairy</option>
+                <option value="meat">Meat</option>
+            </select>
+          </div>
+
+          <p style={{ fontSize: "12px", color: "#666", margin: 0 }}>Nutritional values per 100g / 100ml:</p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+            <input type="number" name="protein" placeholder="Protein (g)" value={form.protein} onChange={handleChange} style={inputStyle} />
+            <input type="number" name="carbs" placeholder="Carbs (g)" value={form.carbs} onChange={handleChange} style={inputStyle} />
+            <input type="number" name="fats" placeholder="Fats (g)" value={form.fats} onChange={handleChange} style={inputStyle} />
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", border: "none", borderRadius: "8px", cursor: "pointer" }}>Cancel</button>
+            <button type="submit" style={{ flex: 1, padding: "10px", background: "#2563eb", color: "white", border: "none", borderRadius: "8px", cursor: "pointer" }}>Save & Add</button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const inputStyle = { padding: "10px", borderRadius: "8px", border: "1px solid #ddd", width: "100%", boxSizing: "border-box" };
+
+export default CreateFoodModal;
+--- END OF FILE: frontend\src\components\CreateFoodModal.jsx ---
+
+--- START OF FILE: frontend\src\components\CreateRecipeModal.jsx ---
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom"; // <--- THE MAGIC FIX
+import api from "../api/axios";
+import { calculateItemMacros } from "../utils/unitConversion";
+
+const CreateRecipeModal = ({ onClose, onSuccess }) => {
+  const [recipeName, setRecipeName] = useState("");
+  const [ingredients, setIngredients] = useState([]);
+  
+  // Search State
+  const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Live Totals
+  const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+
+  // Debugging: Confirm component loads
+  useEffect(() => {
+    console.log("Recipe Modal Mounted!");
+  }, []);
+
+  // 1. Auto-calculate totals
+  useEffect(() => {
+    const newTotals = ingredients.reduce((acc, curr) => {
+        const macros = calculateItemMacros(curr.item, curr.qty, curr.unit);
+        return {
+            calories: acc.calories + macros.calories,
+            protein: acc.protein + macros.protein,
+            carbs: acc.carbs + macros.carbs,
+            fats: acc.fats + macros.fats,
+        };
+    }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
+    setTotals(newTotals);
+  }, [ingredients]);
+
+  // 2. Search
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+        if (!search.trim()) {
+            setSearchResults([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const res = await api.get("/food/ingredients", { params: { search } });
+            setSearchResults(res.data.items || []);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSearching(false);
+        }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const addIngredientToRecipe = (item) => {
+      const defaultUnit = item.unitType === "piece" ? "piece" : (item.baseUnit || "g");
+      const defaultQty = item.unitType === "piece" ? 1 : 100;
+
+      setIngredients(prev => [
+          ...prev, 
+          { item, qty: defaultQty, unit: defaultUnit, id: Date.now() } 
+      ]);
+      setSearch(""); 
+      setSearchResults([]);
+  };
+
+  const updateIngredient = (id, field, value) => {
+      setIngredients(prev => prev.map(ing => 
+          ing.id === id ? { ...ing, [field]: value } : ing
+      ));
+  };
+
+  const removeIngredient = (id) => {
+      setIngredients(prev => prev.filter(ing => ing.id !== id));
+  };
+
+  const handleSave = async () => {
+    if (!recipeName) return alert("Please name your recipe");
+    if (ingredients.length === 0) return alert("Add at least one ingredient");
+
+    try {
+        const res = await api.post("/food/ingredients", {
+            name: recipeName,
+            caloriesPer100g: totals.calories, 
+            protein: totals.protein,
+            carbs: totals.carbs,
+            fats: totals.fats,
+            category: "processed", 
+            unitType: "piece", 
+            baseUnit: "g"
+        });
+        onSuccess(res.data);
+    } catch (err) {
+        alert("Failed to save recipe");
+        console.error(err);
+    }
+  };
+
+  // --- THE PORTAL RENDER ---
+  // This pushes the modal to document.body, escaping any "overflow: hidden" or z-index traps
+  return createPortal(
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", 
+      zIndex: 99999 // Very high z-index
+    }}>
+      <div style={{ 
+          background: "white", width: "95%", maxWidth: "500px", borderRadius: "16px", 
+          display: "flex", flexDirection: "column", maxHeight: "90vh", 
+          boxShadow: "0 20px 50px rgba(0,0,0,0.3)" 
+      }}>
+        
+        {/* HEADER */}
+        <div style={{ padding: "20px", borderBottom: "1px solid #eee" }}>
+            <h3 style={{ margin: "0 0 10px 0", color: "#1e293b" }}>🧑‍🍳 Create New Recipe</h3>
+            <input 
+                placeholder="Recipe Name (e.g. Morning Power Smoothie)" 
+                value={recipeName}
+                onChange={e => setRecipeName(e.target.value)}
+                style={{ width: "100%", padding: "12px", fontSize: "16px", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none" }}
+            />
+        </div>
+
+        {/* BODY */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+            
+            {/* Search Input */}
+            <div style={{ marginBottom: "20px", position: "relative" }}>
+                <label style={{ fontSize: "11px", fontWeight: "bold", color: "#64748b", marginBottom: "6px", display: "block", letterSpacing: "0.5px" }}>ADD INGREDIENTS</label>
+                <input 
+                    placeholder="Search ingredient (e.g. Oats, Banana)..." 
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "#f8fafc" }}
+                />
+                
+                {search && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", maxHeight: "200px", overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 10 }}>
+                        {isSearching ? <div style={{padding:"10px", color:"#999"}}>Loading...</div> : searchResults.map(item => (
+                            <div 
+                                key={item._id} 
+                                onClick={() => addIngredientToRecipe(item)}
+                                style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", display: "flex", justifyContent: "space-between" }}
+                            >
+                                <span style={{fontWeight:"500"}}>{item.name}</span>
+                                <span style={{fontSize:"12px", color:"#64748b"}}>{item.caloriesPer100g} kcal</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* List */}
+            {ingredients.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px", color: "#94a3b8", border: "2px dashed #e2e8f0", borderRadius: "12px", background: "#f8fafc" }}>
+                    No ingredients yet.<br/>Search above to build your meal!
+                </div>
+            ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {ingredients.map((line) => (
+                        <div key={line.id} style={{ display: "flex", alignItems: "center", gap: "8px", background: "#fff", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+                            <div style={{ flex: 1, fontWeight: "600", fontSize: "14px", color: "#334155" }}>{line.item.name}</div>
+                            
+                            <input 
+                                type="number" 
+                                value={line.qty} 
+                                onChange={e => updateIngredient(line.id, "qty", Number(e.target.value))}
+                                style={{ width: "60px", padding: "6px", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                            />
+                            
+                            <select 
+                                value={line.unit} 
+                                onChange={e => updateIngredient(line.id, "unit", e.target.value)}
+                                style={{ width: "70px", padding: "6px", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#f8fafc" }}
+                            >
+                                <option value="g">g</option>
+                                <option value="ml">ml</option>
+                                <option value="cup">cup</option>
+                                <option value="tbsp">tbsp</option>
+                                <option value="piece">pc</option>
+                            </select>
+
+                            <button onClick={() => removeIngredient(line.id)} style={{ border: "none", background: "#fee2e2", borderRadius: "6px", width: "24px", height: "24px", cursor: "pointer", color: "#ef4444", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ padding: "20px", background: "#f8fafc", borderTop: "1px solid #e2e8f0", borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px", alignItems: "center" }}>
+                <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Total Recipe Energy:</span>
+                <span style={{ color: "#2563eb", fontSize: "18px", fontWeight: "bold" }}>{Math.round(totals.calories)} kcal</span>
+            </div>
+            <div style={{ display: "flex", gap: "12px", fontSize: "13px", color: "#64748b", marginBottom: "20px", background: "white", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <span><strong>P:</strong> {Math.round(totals.protein)}g</span> 
+                <span style={{color:"#cbd5e1"}}>|</span>
+                <span><strong>C:</strong> {Math.round(totals.carbs)}g</span> 
+                <span style={{color:"#cbd5e1"}}>|</span>
+                <span><strong>F:</strong> {Math.round(totals.fats)}g</span>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={onClose} style={{ flex: 1, padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", background: "white", cursor: "pointer", color: "#475569", fontWeight: "600" }}>Cancel</button>
+                <button onClick={handleSave} style={{ flex: 1, padding: "12px", border: "none", borderRadius: "8px", background: "#10b981", color: "white", fontWeight: "bold", cursor: "pointer", boxShadow: "0 2px 4px rgba(16, 185, 129, 0.3)" }}>
+                    Save Recipe
+                </button>
+            </div>
+        </div>
+
+      </div>
+    </div>,
+    document.body // <--- Renders outside the root div
+  );
+};
+
+export default CreateRecipeModal;
+--- END OF FILE: frontend\src\components\CreateRecipeModal.jsx ---
+
+--- START OF FILE: frontend\src\components\FoodTimeline.jsx ---
+import React from "react";
+import api from "../api/axios";
+
+const FoodTimeline = ({ items, onRefresh }) => {
+
+  const handleDelete = async (itemId) => {
+    if (!window.confirm("Remove this item?")) return;
+    try {
+      // Calls the new 'remove-item' endpoint
+      await api.post("/log/remove-item", { itemId }); 
+      onRefresh(); // Reload dashboard
+    } catch (err) {
+      alert("Failed to delete");
+    }
+  };
+
+  if (!items || items.length === 0) {
+    return (
+      <div className="p-8 mt-6 text-center border-2 border-gray-200 border-dashed bg-gray-50 rounded-xl">
+        <p className="font-medium text-gray-400">No food logged yet today.</p>
+        <p className="mt-1 text-sm text-gray-400">Add your first meal to start the timeline!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-8">
+      <h3 className="px-2 mb-4 text-lg font-bold text-slate-700">Today's Timeline</h3>
+      
+      <div className="relative ml-4 space-y-8 border-l-2 border-slate-200">
+        {items.map((item, index) => {
+          // Format Time: "10:30 AM"
+          const dateObj = new Date(item.loggedAt);
+          const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          return (
+            <div key={item._id || index} className="relative pl-8">
+              {/* Timeline Dot */}
+              <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
+              
+              {/* Time Label */}
+              <span className="block mb-1 text-xs font-bold tracking-wider uppercase text-slate-400">
+                {timeStr}
+              </span>
+
+              {/* Food Card */}
+              <div className="flex items-center justify-between p-4 transition-shadow bg-white border shadow-sm rounded-xl border-slate-100 group hover:shadow-md">
+                
+                {/* Left: Info */}
+                <div>
+                  <h4 className="text-lg font-bold text-slate-700">
+                    {item.ingredient?.name || "Unknown Item"}
+                  </h4>
+                  <p className="text-sm text-slate-500">
+                    {item.quantity} {item.unit} • <span className="font-semibold text-blue-600">{Math.round(item.calories)} kcal</span>
+                  </p>
+                  
+                  {/* Macros Mini-Badge */}
+                  <div className="flex gap-2 mt-2 text-xs text-slate-400">
+                    <span className="bg-purple-50 text-purple-600 px-2 py-0.5 rounded">P: {Math.round(item.protein)}g</span>
+                    <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded">C: {Math.round(item.carbs)}g</span>
+                    <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded">F: {Math.round(item.fats)}g</span>
+                  </div>
+                </div>
+
+                {/* Right: Delete Button (Shows on Hover) */}
+                <button 
+                  onClick={() => handleDelete(item._id)}
+                  className="p-2 text-red-400 transition-all rounded-lg opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-50"
+                  title="Delete Item"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default FoodTimeline;
+--- END OF FILE: frontend\src\components\FoodTimeline.jsx ---
+
+--- START OF FILE: frontend\src\components\LiveTracker.jsx ---
+
+--- END OF FILE: frontend\src\components\LiveTracker.jsx ---
+
+--- START OF FILE: frontend\src\components\MacroChart.jsx ---
+import React from "react";
+
+const MacroChart = ({ log, goals }) => {
+  // 1. Get Totals
+  const protein = log.totalProtein || 0;
+  const carbs = log.totalCarbs || 0;
+  const fats = log.totalFats || 0;
+  
+  // 2. Calculate Total Grams for ratios
+  const totalGrams = protein + carbs + fats;
+  
+  // Avoid division by zero
+  const p = totalGrams ? (protein / totalGrams) * 100 : 0;
+  const c = totalGrams ? (carbs / totalGrams) * 100 : 0;
+  const f = totalGrams ? (fats / totalGrams) * 100 : 0;
+
+  // 3. SVG Geometry Logic (Circle Circumference)
+  const radius = 70;
+  const circumference = 2 * Math.PI * radius; // ~440px
+  
+  // Calculate stroke offsets
+  // We stack them: Protein starts at 0, Carbs starts after Protein, Fats after both
+  const pOffset = circumference - (p / 100) * circumference;
+  const cOffset = circumference - (c / 100) * circumference;
+  const fOffset = circumference - (f / 100) * circumference;
+
+  return (
+    <div style={{
+      background: "white",
+      padding: "24px",
+      borderRadius: "20px",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      width: "100%",
+      maxWidth: "360px" // Keep it contained
+    }}>
+      <h3 style={{ margin: "0 0 20px 0", color: "#334155", alignSelf: "flex-start" }}>
+        Macro Split
+      </h3>
+
+      <div style={{ position: "relative", width: "200px", height: "200px" }}>
+        {/* CENTER TEXT */}
+        <div style={{
+            position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+            display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center"
+        }}>
+            <span style={{ fontSize: "28px", fontWeight: "800", color: "#1e293b" }}>
+                {Math.round(log.totalCalories || 0)}
+            </span>
+            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600" }}>kcal eaten</span>
+        </div>
+
+        {/* SVG CHART */}
+        <svg width="200" height="200" viewBox="0 0 200 200" style={{ transform: "rotate(-90deg)" }}>
+            {/* Background Circle (Grey) */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="20" />
+
+            {/* FATS (Orange) - Bottom Layer */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#fb923c" strokeWidth="20"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference - ((p+c+f)/100)*circumference} 
+                strokeLinecap="round"
+                style={{ transition: "stroke-dashoffset 1s ease" }}
+            />
+
+            {/* CARBS (Blue) - Middle Layer */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#818cf8" strokeWidth="20"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference - ((p+c)/100)*circumference}
+                strokeLinecap="round"
+                style={{ transition: "stroke-dashoffset 1s ease" }}
+            />
+
+            {/* PROTEIN (Purple) - Top Layer */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#a78bfa" strokeWidth="20"
+                strokeDasharray={circumference}
+                strokeDashoffset={pOffset} 
+                strokeLinecap="round"
+                style={{ transition: "stroke-dashoffset 1s ease" }}
+            />
+        </svg>
+      </div>
+
+      {/* LEGEND */}
+      <div style={{ display: "flex", gap: "20px", marginTop: "24px", width: "100%", justifyContent: "center" }}>
+        
+        <MacroLegend color="#a78bfa" label="Protein" val={protein} total={goals.proteinGoal} />
+        <MacroLegend color="#818cf8" label="Carbs" val={carbs} total={goals.carbsGoal} />
+        <MacroLegend color="#fb923c" label="Fats" val={fats} total={goals.fatsGoal} />
+
+      </div>
+    </div>
+  );
+};
+
+// Helper Sub-component for clean code
+const MacroLegend = ({ color, label, val, total }) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <span style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color }}></span>
+            {label}
+        </span>
+        <span style={{ fontWeight: "700", color: "#334155", fontSize: "16px" }}>{Math.round(val)}g</span>
+        <span style={{ fontSize: "10px", color: "#94a3b8" }}>/ {total}g</span>
+    </div>
+);
+
+export default MacroChart;
+--- END OF FILE: frontend\src\components\MacroChart.jsx ---
+
+--- START OF FILE: frontend\src\components\MealSection.jsx ---
+
+--- END OF FILE: frontend\src\components\MealSection.jsx ---
+
+--- START OF FILE: frontend\src\components\ProtectedRoute.jsx ---
+import { Navigate } from "react-router-dom";
+
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+export default ProtectedRoute;
+
+--- END OF FILE: frontend\src\components\ProtectedRoute.jsx ---
+
+--- START OF FILE: frontend\src\components\Suggestions.jsx ---
+
+--- END OF FILE: frontend\src\components\Suggestions.jsx ---
+
+--- START OF FILE: frontend\src\components\WaterTracker.jsx ---
+import { useState } from "react";
+import api from "../api/axios";
+
+const WaterTracker = ({ log, userGoal, onUpdate }) => {
+  const [adding, setAdding] = useState(false);
+
+  // 1. Calculate Percentage
+  // Clamp between 0 and 100 for the visual
+  const current = log.waterConsumed || 0;
+  const percentage = Math.min(Math.max((current / userGoal) * 100, 0), 100);
+
+  // 2. Handle API Update
+  const handleUpdate = async (amount) => {
+    try {
+      setAdding(true);
+      await api.put("/log/water", { amount });
+      onUpdate(); // Refresh the dashboard data
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div style={{ 
+      background: "white", 
+      padding: "24px", 
+      borderRadius: "20px", 
+      boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      marginBottom: "20px"
+    }}>
+      
+      <h3 style={{ margin: "0 0 20px 0", color: "#1e293b" }}>Hydration Tracker</h3>
+
+      {/* --- THE SPHERE --- */}
+      <div className="water-sphere">
+        {/* The Wave Container: Moves up/down based on % */}
+        <div 
+            className="water-level" 
+            style={{ transform: `translateY(${100 - percentage}%)` }}
+        >
+            <div className="wave wave-back"></div>
+            <div className="wave wave-front"></div>
+        </div>
+
+        {/* Text Overlay (Centered) */}
+        <div className="water-text">
+            <span className="amount">{current}</span>
+            <span className="unit">ml</span>
+            <div className="goal">Goal: {userGoal}</div>
+        </div>
+      </div>
+
+      {/* --- Controls --- */}
+      <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
+        <button 
+            className="water-btn minus"
+            onClick={() => handleUpdate(-250)}
+            disabled={current === 0 || adding}
+        >
+            - 250ml
+        </button>
+        <button 
+            className="water-btn plus"
+            onClick={() => handleUpdate(250)}
+            disabled={adding}
+        >
+            + 250ml
+        </button>
+      </div>
+
+      {/* --- CSS STYLES (Scoped) --- */}
+      <style>{`
+        .water-sphere {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            border: 4px solid #e0f2fe; /* Light glass rim */
+            overflow: hidden; /* Clips the square waves to a circle */
+            background: #37aaf6; /* Empty state color */
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05); /* Inner shadow for depth */
+        }
+
+        /* This container moves up/down */
+        .water-level {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            // background: #3b82f6; /* Base water color */
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* The Rotating Waves */
+        .wave {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: 0;
+            left: -50%;
+            border-radius: 40%; /* THE MAGIC: Makes it a rounded square */
+        }
+
+        /* Back Wave (Darker, Slower) */
+        .wave-back {
+            background: rgba(37, 99, 235, 0.4);
+            animation: drift 10s infinite linear;
+        }
+
+        /* Front Wave (Lighter, Faster) */
+        .wave-front {
+            background: rgba(255, 255, 255, 0.2); /* Highlight */
+            animation: drift 6s infinite linear;
+            opacity: 0.6;
+        }
+
+        @keyframes drift {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Text Overlay */
+        .water-text {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8); /* Readability */
+        }
+        
+        .water-text .amount {
+            font-size: 32px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .water-text .unit {
+            font-size: 14px;
+            color: #64748b;
+            font-weight: 600;
+        }
+        .water-text .goal {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        /* Buttons */
+        .water-btn {
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .water-btn:active { transform: scale(0.95); }
+        
+        .water-btn.plus {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        .water-btn.minus {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+        .water-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+      `}</style>
+    </div>
+  );
+};
+
+export default WaterTracker;
+--- END OF FILE: frontend\src\components\WaterTracker.jsx ---
+
+--- START OF FILE: frontend\src\context\AuthContext.jsx ---
+import { createContext, useContext, useState } from "react";
+import api from "../api/axios";
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(
+    JSON.parse(localStorage.getItem("user")) || null
+  );
+
+  const login = async (email, password) => {
+    const res = await api.post("/auth/login", { email, password });
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+    setUser(res.data.user);
+  };
+
+  const register = async (formData) => {
+    const res = await api.post("/auth/register", formData);
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+    setUser(res.data.user);
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
+
+--- END OF FILE: frontend\src\context\AuthContext.jsx ---
+
+--- START OF FILE: frontend\src\index.css ---
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+--- END OF FILE: frontend\src\index.css ---
+
+--- START OF FILE: frontend\src\main.jsx ---
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import { AuthProvider } from "./context/AuthContext";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </React.StrictMode>
+);
+
+--- END OF FILE: frontend\src\main.jsx ---
+
+--- START OF FILE: frontend\src\pages\Dashboard.jsx ---
+import React, { useEffect, useState } from "react";
+import api from "../api/axios";
+
+// Components
+import AddMeal from "../components/AddMeal";
+import WaterTracker from "../components/WaterTracker";
+import CalorieDonut from "../components/CalorieDonut";
+import FoodTimeline from "../components/FoodTimeline";
+
+function Dashboard() {
+  const [log, setLog] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const user = JSON.parse(localStorage.getItem("user")) || {};
+
+  // Fetch today's log from the backend
+  const fetchLog = async () => {
+    try {
+      const res = await api.get("/log/today");
+      setLog(res.data);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLog();
+  }, []);
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-xl font-semibold animate-pulse text-slate-400">Loading your day...</div>
+      </div>
+    );
+  }
+
+  if (!log) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-red-500">Failed to load data. Please try refreshing.</div>
+      </div>
+    );
+  }
+
+  // Calculate Goals
+  const calorieGoal = user.dailyCalorieLimit || 2000;
+
+  return (
+    <div className="min-h-screen p-4 font-sans bg-gray-50 md:p-8">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* --- 1. Header & Actions --- */}
+        <header className="flex items-end justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">Today's Energy</h1>
+            <p className="mt-1 font-medium text-slate-500">Track your flow, not just your food.</p>
+          </div>
+          <button 
+            onClick={logout} 
+            className="px-4 py-2 text-sm font-semibold text-red-400 transition-colors rounded-lg hover:text-red-600 hover:bg-red-50"
+          >
+            Log Out
+          </button>
+        </header>
+
+        {/* --- 2. Stats Grid (Visuals) --- */}
+        <div className="grid grid-cols-1 gap-6 mb-8 md:grid-cols-2">
+          {/* Left: Macros Donut */}
+          <div className="flex justify-center p-1 bg-white border shadow-sm rounded-3xl border-slate-100">
+            <CalorieDonut 
+                log={log} 
+                goal={calorieGoal} 
+            />
+          </div>
+
+          {/* Right: Water Tracker */}
+          <div className="p-1 bg-white border shadow-sm rounded-3xl border-slate-100">
+            <WaterTracker 
+                log={log} 
+                userGoal={user.waterGoal || 2500} 
+                onUpdate={fetchLog} 
+            />
+          </div>
+        </div>
+
+        {/* --- 3. Global Add Button (No more 'Breakfast' sections) --- */}
+        <div className="p-6 mb-8 bg-white border shadow-sm rounded-2xl border-slate-100">
+           <h3 className="mb-4 text-lg font-bold text-slate-700">Log Food</h3>
+           {/* We pass onAdded={fetchLog} so the timeline updates instantly after adding */}
+           <AddMeal onAdded={fetchLog} />
+        </div>
+
+        {/* --- 4. The New Timeline Stream --- */}
+        <FoodTimeline 
+            items={log.foodItems} 
+            onRefresh={fetchLog} 
+        />
+
+      </div>
+    </div>
+  );
+}
+
+export default Dashboard;
+--- END OF FILE: frontend\src\pages\Dashboard.jsx ---
+
+--- START OF FILE: frontend\src\pages\Login.jsx ---
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+
+function Login() {
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await login(email, password);
+    } catch (err) {
+      alert("Invalid credentials");
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>Login</h2>
+      <input
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button>Login</button>
+    </form>
+  );
+}
+
+export default Login;
+
+--- END OF FILE: frontend\src\pages\Login.jsx ---
+
+--- START OF FILE: frontend\src\pages\Register.jsx ---
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+
+function Register() {
+  const { register } = useAuth();
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    age: "",
+    gender: "male",
+    height: "",
+    weight: "",
+    activityLevel: "moderate",
+    goal: "fat_loss",
+    dietType: "veg",
+    allergies: []
+  });
+
+  const handleChange = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  const payload = {
+    ...form,
+    age: Number(form.age),
+    height: Number(form.height),
+    weight: Number(form.weight)
+  };
+
+  try {
+    await register(payload);
+    navigate("/dashboard");
+  } catch (err) {
+    console.error(err.response?.data);
+    alert(err.response?.data?.message || "Registration failed");
+  }
+};
+
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>Register</h2>
+      {Object.keys(form).map((key) =>
+        typeof form[key] === "string" ? (
+          <input
+            key={key}
+            name={key}
+            placeholder={key}
+            value={form[key]}
+            onChange={handleChange}
+          />
+        ) : null
+      )}
+      <button>Register</button>
+    </form>
+  );
+}
+
+export default Register;
+
+--- END OF FILE: frontend\src\pages\Register.jsx ---
+
+--- START OF FILE: frontend\src\utils\format.js ---
+
+--- END OF FILE: frontend\src\utils\format.js ---
+
+--- START OF FILE: frontend\src\utils\unitConversion.js ---
+export const convertToGramOrMl = (quantity, unit, baseUnit) => {
+  // Simple conversion factors
+  const factors = {
+    g: 1,
+    ml: 1,
+    kg: 1000,
+    l: 1000,
+    // Average estimations
+    cup: 240, 
+    tbsp: 15,
+    tsp: 5,
+    piece: 1 // pieces are handled specifically by weight usually, but 1:1 for now
+  };
+
+  const factor = factors[unit] || 1;
+  return quantity * factor;
+};
+
+export const calculateItemMacros = (item, quantity, unit) => {
+  // If item is per piece, and user selected piece
+  if (item.unitType === "piece" && (unit === "piece" || unit === "pc")) {
+      const ratio = quantity; // 1 cookie = 1 * calories
+      return {
+          calories: item.caloriesPer100g * ratio,
+          protein: item.protein * ratio,
+          carbs: item.carbs * ratio,
+          fats: item.fats * ratio
+      };
+  }
+
+  // Standard Weight/Volume Calculation
+  // We assume item.caloriesPer100g is strictly per 100 base units (g or ml)
+  const amountInBase = convertToGramOrMl(quantity, unit, item.baseUnit);
+  const ratio = amountInBase / 100;
+
+  return {
+      calories: item.caloriesPer100g * ratio,
+      protein: item.protein * ratio,
+      carbs: item.carbs * ratio,
+      fats: item.fats * ratio
+  };
+};
+--- END OF FILE: frontend\src\utils\unitConversion.js ---
