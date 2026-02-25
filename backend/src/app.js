@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-  origin: ["http://localhost:5173", "https://sehat-3stfkzw5c-yash26988412-1471s-projects.vercel.app"],
+  origin: ["http://localhost:5173", "https://sehat-app-two.vercel.app","https://sehat-3stfkzw5c-yash26988412-1471s-projects.vercel.app"],
   credentials: true
 }));
 
