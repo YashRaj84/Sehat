@@ -25,7 +25,7 @@ const Profile = () => {
     setStatus("Saving...");
     try {
       // Assumes you create a PUT /users/profile route in backend
-      const res = await api.put("/users/profile", form);
+      const res = await api.put("/auth/profile", form);
       localStorage.setItem("user", JSON.stringify(res.data.user)); // Update local storage
       setStatus("Profile Updated Successfully!");
       setTimeout(() => setStatus(""), 3000);
