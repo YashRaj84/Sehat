@@ -10,6 +10,9 @@ function Register() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // 🔥 New State for Password Toggle
+  const [showPassword, setShowPassword] = useState(false);
 
   const [form, setForm] = useState({
     name: "", email: "", password: "",
@@ -50,10 +53,8 @@ function Register() {
     backgroundVideo: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 },
     overlay: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(17, 24, 39, 0.6)", zIndex: 1 },
     contentWrapper: { position: "relative", zIndex: 10, width: "100%", maxWidth: "450px", padding: "20px", display: "flex", flexDirection: "column", height: "100vh", justifyContent: "center" },
-    
-    // 🔥 UPDATED GLASS CARD
     card: {
-      backgroundColor: "rgba(31, 41, 55, 0.4)", // 40% Opacity
+      backgroundColor: "rgba(31, 41, 55, 0.4)", 
       backdropFilter: "blur(12px)",
       border: "1px solid rgba(255, 255, 255, 0.15)",
       borderRadius: "24px",
@@ -64,7 +65,6 @@ function Register() {
       maxHeight: "90vh",
       overflowY: "auto"
     },
-
     header: { textAlign: "center", marginBottom: "20px" },
     logoHeader: { fontSize: "28px", fontWeight: "900", color: "#fff", marginBottom: "20px", letterSpacing: "1px", textShadow: "0 2px 10px rgba(0,0,0,0.5)" },
     progressContainer: { display: "flex", gap: "6px", marginBottom: "10px" },
@@ -119,12 +119,40 @@ function Register() {
             <div style={{ flex: 1 }}>
                 {step === 1 && (
                     <>
-                        <div style={styles.inputGroup}><label style={styles.label}>Full Name</label><input style={styles.input} name="name" value={form.name} onChange={handleChange} placeholder="John Doe" /></div>
-                        <div style={styles.inputGroup}><label style={styles.label}>Email</label><input style={styles.input} name="email" value={form.email} onChange={handleChange} placeholder="name@example.com" /></div>
-                        <div style={styles.inputGroup}><label style={styles.label}>Password</label><input style={styles.input} name="password" type="password" value={form.password} onChange={handleChange} placeholder="••••••••" /></div>
+                        <div style={styles.inputGroup}>
+                          <label style={styles.label}>Full Name</label>
+                          <input style={styles.input} name="name" value={form.name} onChange={handleChange} placeholder="John Doe" autoComplete="off" />
+                        </div>
+                        
+                        <div style={styles.inputGroup}>
+                          <label style={styles.label}>Email</label>
+                          <input style={styles.input} name="email" value={form.email} onChange={handleChange} placeholder="name@example.com" autoComplete="off" />
+                        </div>
+                        
+                        <div style={styles.inputGroup}>
+                          <label style={styles.label}>Password</label>
+                          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <input 
+                              style={{ ...styles.input, paddingRight: "60px" }} // Added padding to prevent text hiding behind the button
+                              name="password" 
+                              type={showPassword ? "text" : "password"} // Toggle type
+                              value={form.password} 
+                              onChange={handleChange} 
+                              placeholder="••••••••" 
+                              autoComplete="new-password" // Kills the browser autocomplete
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => setShowPassword(!showPassword)} 
+                              style={{ position: "absolute", right: "15px", background: "none", border: "none", color: "#ff7e35", cursor: "pointer", fontSize: "12px", fontWeight: "bold", textTransform: "uppercase" }}
+                            >
+                              {showPassword ? "Hide" : "Show"}
+                            </button>
+                          </div>
+                        </div>
                     </>
                 )}
-                {/* ... (Existing logic for steps 2-6) ... */}
+                {/* Steps 2-6 remain unchanged */}
                 {step === 2 && (<div style={styles.selectionGrid}><div style={styles.selectionCard(form.gender === "male")} onClick={() => handleSelect("gender", "male")}>👨 Male</div><div style={styles.selectionCard(form.gender === "female")} onClick={() => handleSelect("gender", "female")}>👩 Female</div></div>)}
                 {step === 3 && (<div style={{ textAlign: "center", margin: "20px 0" }}><div style={{ fontSize: "50px" }}>🎂</div><input type="number" name="age" value={form.age} onChange={handleChange} style={{ fontSize: "40px", width: "100px", background: "transparent", border: "none", borderBottom: "2px solid #ff7e35", color: "white", textAlign: "center", outline: "none" }} placeholder="25" /></div>)}
                 {step === 4 && (<><div style={styles.inputGroup}><label style={styles.label}>Height (cm)</label><input style={styles.input} name="height" type="number" value={form.height} onChange={handleChange} placeholder="175" /></div><div style={styles.inputGroup}><label style={styles.label}>Weight (kg)</label><input style={styles.input} name="weight" type="number" value={form.weight} onChange={handleChange} placeholder="70" /></div></>)}
