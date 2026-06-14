@@ -253,10 +253,10 @@ export const getTodayCategoryStats = async (req, res) => {
 };
 
 /* =========================
-   GET HISTORY LOGS (last N days)
+   GET PROGRESS LOGS (last N days)
    Returns array oldest -> newest with zero totals when missing
 ========================= */
-export const getHistoryLogs = async (req, res) => {
+export const getProgressLogs = async (req, res) => {
   try {
     const days = Math.min(90, parseInt(req.query.days, 10) || 7); // Cap to max 90 days for performance
     const results = [];
@@ -305,7 +305,7 @@ export const getHistoryLogs = async (req, res) => {
 
     return res.json(results);
   } catch (err) {
-    console.error("HISTORY LOGS ERROR:", err);
+    console.error("PROGRESS LOGS ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 };

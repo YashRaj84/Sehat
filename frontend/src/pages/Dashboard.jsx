@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/axios";
-import logoVideo from "../assets/logo.mp4"; // <--- IMPORT LOGO
-
-// Components
-import Navbar from "../components/Navbar";
-import AddMeal from "../components/AddMeal";
-import WaterTracker from "../components/WaterTracker";
+import Layout from "../components/Layout";
+import StaticWaterTracker from "../components/StaticWaterTracker";
 import CalorieDonut from "../components/CalorieDonut";
 import FoodTimeline from "../components/FoodTimeline";
 
@@ -27,81 +23,68 @@ function Dashboard() {
 
   useEffect(() => { fetchLog(); }, []);
 
+  if (loading) return <Layout><div className="min-h-full flex items-center justify-center text-on-surface-variant font-sans">Loading...</div></Layout>;
+  if (!log) return <Layout><div className="min-h-full flex items-center justify-center text-error font-sans">Failed to load data.</div></Layout>;
 
-  if (loading) return <div style={{...styles.container, justifyContent: "center"}}>Loading...</div>;
-  if (!log) return <div style={{...styles.container, justifyContent: "center", color: "#ef4444"}}>Failed to load data.</div>;
-
-  // --- GOAL CALCULATIONS ---
   const calorieGoal = user.dailyCalorieLimit || 2000;
-  
   const macroGoals = {
       protein: Math.round((calorieGoal * 0.25) / 4), 
       carbs: Math.round((calorieGoal * 0.50) / 4),   
       fats: Math.round((calorieGoal * 0.25) / 9)     
   };
 
+  // Safe checks for data
+  const consumed = log?.totalCalories || 0;
+  const remaining = Math.max(0, calorieGoal - consumed);
+  
+  const pConsumed = log?.totalProtein || 0;
+  const cConsumed = log?.totalCarbs || 0;
+  const fConsumed = log?.totalFats || 0;
+
+  const pPct = Math.min(100, (pConsumed / macroGoals.protein) * 100);
+  const cPct = Math.min(100, (cConsumed / macroGoals.carbs) * 100);
+  const fPct = Math.min(100, (fConsumed / macroGoals.fats) * 100);
+
   return (
-    <div style={styles.container}>
-      
-      {/* --- NAVIGATION --- */}
-      <Navbar />
-
-      <div style={styles.mainContent}>
+    <Layout>
+      <div className="max-w-6xl mx-auto">
         
-        <div style={{ marginBottom: "30px" }}>
-            <h1 style={styles.pageTitle}>Today's Overview</h1>
-            <p style={styles.pageSubtitle}>Let's keep your nutrition on track.</p>
+        {/* Page Header */}
+        <div className="mb-6 lg:mb-8">
+            <h2 className="font-display text-2xl md:text-3xl font-bold text-on-background tracking-tight">Daily Overview</h2>
+            <p className="font-sans text-sm md:text-base text-on-surface-variant mt-1">Stay on track. You're doing great today.</p>
         </div>
 
-        {/* --- VISUALS GRID --- */}
-        <div style={styles.gridContainer}>
-            <div style={styles.card}>
+        {/* Bento Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6 auto-rows-min">
+            
+            {/* Main Calorie Tracker (Spans 8 cols on desktop) */}
+            <section className="md:col-span-8 bg-surface rounded-2xl shadow-sm hover:shadow-md py-12 px-6 lg:px-8 flex flex-col items-center justify-center transition-shadow duration-300 relative overflow-hidden border border-surface-dim">
+                <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary-container opacity-10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10">
+                    <span className="inline-block text-xs font-bold bg-primary-container text-on-primary-container px-3 py-1.5 rounded-full border border-primary/10 shadow-sm transition-all duration-300 hover:scale-105 hover:shadow-md hover:bg-primary/20 cursor-default">
+                        {Math.round(consumed)} / {calorieGoal} kcal
+                    </span>
+                </div>
+
                 <CalorieDonut log={log} goal={calorieGoal} macroGoals={macroGoals} />
-            </div>
-            <div style={styles.card}>
-                 <WaterTracker log={log} userGoal={user.waterGoal || 2500} onUpdate={fetchLog} />
-            </div>
-        </div>
+            </section>
 
-        {/* --- LOGGING AREA --- */}
-        <div style={styles.loggingGrid}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                <div style={styles.card}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-                         <span style={{ fontSize: "24px" }}>🍽️</span>
-                         <h3 style={styles.cardTitle}>Log Meal</h3>
-                    </div>
-                    <AddMeal onAdded={fetchLog} />
-                </div>
+            {/* Water Intake (Spans 4 cols) - To be StaticHumanWaterTracker */}
+            <section className="md:col-span-4 bg-surface rounded-2xl shadow-sm p-6 lg:p-8 flex flex-col justify-center border border-surface-dim">
+                 <StaticWaterTracker log={log} userGoal={user.waterGoal || 2500} />
+            </section>
+
+            {/* Today's Meals List (Spans 12 cols, sits below the rest) */}
+            <section className="md:col-span-12 bg-surface rounded-2xl shadow-sm p-6 lg:p-8 border border-surface-dim">
                 <FoodTimeline items={log.foodItems} onRefresh={fetchLog} />
-            </div>
-
-            {/* Sidebar Tip */}
-            <div>
-                <div style={styles.tipCard}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "8px", color: "#fff" }}>💡 Pro Tip</h3>
-                    <p style={{ fontSize: "13px", lineHeight: "1.5", color: "#cbd5e1" }}>
-                        Tracking your water intake is just as important as your calories for maintaining energy levels throughout the day.
-                    </p>
-                </div>
-            </div>
+            </section>
         </div>
 
       </div>
-    </div>
+    </Layout>
   );
 }
-
-const styles = {
-  container: { minHeight: "100vh", backgroundColor: "#111827", color: "#ffffff", fontFamily: "'Inter', sans-serif", display: "flex", flexDirection: "column" },
-  mainContent: { maxWidth: "1200px", width: "100%", margin: "0 auto", padding: "30px 24px", boxSizing: "border-box" },
-  pageTitle: { fontSize: "32px", fontWeight: "800", margin: "0 0 8px 0" },
-  pageSubtitle: { color: "#9ca3af", margin: 0, fontSize: "16px" },
-  gridContainer: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px", marginBottom: "30px" },
-  card: { backgroundColor: "#1f2937", borderRadius: "24px", padding: "24px", border: "1px solid #374151", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", display: "flex", flexDirection: "column", justifyContent: "center" },
-  cardTitle: { margin: 0, fontSize: "18px", fontWeight: "700" },
-  loggingGrid: { display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" },
-  tipCard: { backgroundColor: "#3b82f6", backgroundImage: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)", borderRadius: "24px", padding: "24px", position: "sticky", top: "100px" }
-};
 
 export default Dashboard;

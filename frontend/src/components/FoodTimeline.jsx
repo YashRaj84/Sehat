@@ -1,20 +1,17 @@
 import React, { useState } from "react";
 import api from "../api/axios";
 
-// Strictly using your original props: 'items' and 'onRefresh'
 const FoodTimeline = ({ items, onRefresh }) => {
   const [deletingId, setDeletingId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editAmount, setEditAmount] = useState("");
 
-  // Your original, working delete logic + a loading state so the user knows it's working
   const handleDelete = async (itemId) => {
     if (!window.confirm("Remove this item?")) return;
     
     try {
       setDeletingId(itemId);
-      // Your original working API call
       await api.post("/log/remove-item", { itemId }); 
-      
-      // Your original refresh trigger
       if (onRefresh) onRefresh(); 
     } catch (err) {
       console.error(err);
@@ -24,146 +21,162 @@ const FoodTimeline = ({ items, onRefresh }) => {
     }
   };
 
+  const handleEditInit = (item) => {
+    setEditingId(item._id);
+    setEditAmount(item.quantity.toString());
+  };
+
+  const handleEditSave = async (item) => {
+    try {
+      const newQuantity = Number(editAmount);
+      if (isNaN(newQuantity) || newQuantity <= 0) {
+          alert("Please enter a valid amount");
+          return;
+      }
+      
+      const newCalories = (item.calories / item.quantity) * newQuantity;
+      const newProtein = (item.protein / item.quantity) * newQuantity;
+      const newCarbs = (item.carbs / item.quantity) * newQuantity;
+      const newFats = (item.fats / item.quantity) * newQuantity;
+
+      await api.patch(`/log/item/${item._id}`, { 
+          quantity: newQuantity,
+          calories: newCalories,
+          protein: newProtein,
+          carbs: newCarbs,
+          fats: newFats
+      });
+      setEditingId(null);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update");
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditAmount("");
+  };
+
   const formatTime = (dateString) => {
     if (!dateString) return "--:--";
     const date = new Date(dateString);
     return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
-  // Safe fallback if items are missing
-  const timelineItems = items || [];
+  // Sort items by loggedAt descending
+  const timelineItems = [...(items || [])].sort((a, b) => new Date(b.loggedAt) - new Date(a.loggedAt));
 
   return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column" }}>
+    <div className="w-full flex flex-col font-sans">
         
         {/* Header */}
-        <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "bold", color: "#f8fafc" }}>Today's Timeline</h3>
-            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "600", backgroundColor: "#1e293b", padding: "4px 10px", borderRadius: "12px" }}>
-                {timelineItems.length} {timelineItems.length === 1 ? "Item" : "Items"}
-            </span>
+        <div className="mb-6 flex justify-between items-center pb-2">
+            <h3 className="m-0 text-xl font-display font-bold text-on-surface tracking-tight">Today's Diet</h3>
         </div>
 
         {/* Empty State */}
         {timelineItems.length === 0 ? (
-            <div style={{ padding: "40px 20px", textAlign: "center", backgroundColor: "#1e293b", borderRadius: "16px", border: "1px dashed #334155" }}>
-                <div style={{ fontSize: "40px", marginBottom: "10px" }}>🍽️</div>
-                <h4 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>No meals logged yet</h4>
-                <p style={{ color: "#64748b", margin: 0, fontSize: "14px" }}>Search and add food above to start tracking your day.</p>
+            <div className="py-10 px-5 text-center bg-surface-neutral rounded-2xl border border-dashed border-surface-dim">
+                <div className="text-4xl mb-3">🍽️</div>
+                <h4 className="text-on-surface font-display font-bold mb-2">No meals logged yet</h4>
+                <p className="text-on-surface-variant text-sm m-0">Click Add Food to start tracking your day.</p>
             </div>
         ) : (
-            /* Timeline Container */
-            <div style={{ position: "relative", paddingLeft: "16px" }}>
-                
-                {/* The vertical timeline line */}
-                <div style={{ position: "absolute", left: "22px", top: "10px", bottom: "20px", width: "2px", backgroundColor: "#334155", borderRadius: "2px", zIndex: 0 }}></div>
-
-                {timelineItems.map((item, index) => {
-                    const isLast = index === timelineItems.length - 1;
+            <div className="flex flex-col gap-4">
+                {timelineItems.map((item) => {
                     const isDeleting = deletingId === item._id;
+                    const isEditing = editingId === item._id;
 
                     return (
-                        <div key={item._id || index} className="timeline-item" style={{ position: "relative", marginBottom: isLast ? "0" : "20px", display: "flex", alignItems: "flex-start", gap: "20px", zIndex: 1, opacity: isDeleting ? 0.5 : 1 }}>
+                        <div key={item._id} className={`flex items-center justify-between bg-surface rounded-2xl p-4 border border-surface-dim shadow-sm hover:shadow-md transition-all ${isDeleting ? 'opacity-50' : ''}`}>
                             
-                            {/* Glowing Orange Dot */}
-                            <div style={{ position: "relative", marginTop: "24px" }}>
-                                <div style={{ width: "14px", height: "14px", borderRadius: "50%", backgroundColor: "#111827", border: "3px solid #ff7e35", zIndex: 2, position: "relative", boxShadow: "0 0 10px rgba(255, 126, 53, 0.4)" }}></div>
+                            {/* Left Side: Icon, Name, Time, and Macros */}
+                            <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-full bg-primary-container text-primary flex items-center justify-center text-xl shadow-inner border border-primary/10 flex-shrink-0">
+                                    <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>restaurant</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-base font-bold text-on-surface capitalize font-display">
+                                        {item.ingredient?.name || item.name || "Unknown Food"}
+                                    </span>
+                                    <span className="text-sm text-on-surface-variant font-medium flex items-center gap-1.5 mt-0.5">
+                                        {formatTime(item.loggedAt)}
+                                        <span className="w-1 h-1 rounded-full bg-surface-dim"></span>
+                                        <span className="font-bold text-on-background">
+                                            {Math.round(item.calories || 0)} kcal
+                                        </span>
+                                    </span>
+                                    {/* Macro Badges */}
+                                    <div className="flex gap-2 flex-wrap mt-2">
+                                        <span className="flex items-center gap-1 bg-secondary-container/30 text-secondary px-2 py-0.5 rounded text-[10px] font-bold">
+                                            <span className="w-1 h-1 rounded-full bg-secondary"></span>
+                                            {Math.round(item.protein || 0)}g P
+                                        </span>
+                                        <span className="flex items-center gap-1 bg-tertiary-container/30 text-tertiary px-2 py-0.5 rounded text-[10px] font-bold">
+                                            <span className="w-1 h-1 rounded-full bg-tertiary"></span>
+                                            {Math.round(item.carbs || 0)}g C
+                                        </span>
+                                        <span className="flex items-center gap-1 bg-on-surface/10 text-on-surface px-2 py-0.5 rounded text-[10px] font-bold">
+                                            <span className="w-1 h-1 rounded-full bg-on-surface"></span>
+                                            {Math.round(item.fats || 0)}g F
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Modern Dark Card */}
-                            <div className="meal-card" style={{ flex: 1, backgroundColor: "#1e293b", borderRadius: "16px", padding: "16px", border: "1px solid #334155", display: "flex", flexDirection: "column", gap: "12px", transition: "all 0.2s ease" }}>
-                                
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                    <div>
-                                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                                            <span style={{ fontSize: "16px", fontWeight: "700", color: "#f8fafc", textTransform: "capitalize" }}>
-                                                {item.ingredient?.name || item.name || "Unknown Food"}
-                                            </span>
-                                            <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: "500" }}>
-                                                {item.quantity} {item.unit}
-                                            </span>
-                                        </div>
-                                        <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", fontWeight: "600" }}>
-                                            🕒 {formatTime(item.loggedAt)}
+                            {/* Right Side: Quantity Edit & Delete */}
+                            <div className="flex items-center gap-2">
+                                {isEditing ? (
+                                    <div className="flex items-center bg-surface-neutral rounded-lg border border-primary p-1 shadow-sm">
+                                        <input 
+                                            type="number" 
+                                            value={editAmount}
+                                            onChange={(e) => setEditAmount(e.target.value)}
+                                            className="w-16 text-center bg-transparent border-none text-on-surface font-bold text-sm focus:outline-none p-1"
+                                            autoFocus
+                                        />
+                                        <span className="text-xs text-on-surface-variant font-bold pr-2">{item.unit}</span>
+                                        <div className="flex border-l border-surface-dim">
+                                            <button onClick={() => handleEditSave(item)} className="p-1.5 text-primary hover:bg-primary/10 rounded-r-none transition-colors" title="Save">
+                                                <span className="material-symbols-outlined text-[18px]">check</span>
+                                            </button>
+                                            <button onClick={handleEditCancel} className="p-1.5 text-error hover:bg-error/10 rounded-r-lg transition-colors" title="Cancel">
+                                                <span className="material-symbols-outlined text-[18px]">close</span>
+                                            </button>
                                         </div>
                                     </div>
-
-                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
-                                        <span style={{ fontSize: "16px", fontWeight: "800", color: "#ff7e35" }}>
-                                            {Math.round(item.calories || 0)} <span style={{ fontSize: "12px", fontWeight: "600", color: "#94a3b8" }}>kcal</span>
+                                ) : (
+                                    <div className="flex items-center bg-surface-neutral rounded-lg px-3 py-1.5 border border-surface-dim group hover:border-primary/30 transition-colors">
+                                        <span className="text-sm font-bold text-on-surface mr-2">
+                                            {item.quantity} {item.unit}
                                         </span>
-                                        
-                                        {/* Delete Button wired to your logic */}
                                         <button 
-                                            onClick={() => handleDelete(item._id)}
-                                            disabled={isDeleting}
-                                            className="delete-btn"
-                                            title="Remove Item"
+                                            onClick={() => handleEditInit(item)}
+                                            className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+                                            title="Edit Quantity"
                                         >
-                                            {isDeleting ? "Removing..." : "✕ Remove"}
+                                            <span className="material-symbols-outlined text-[18px]">edit</span>
                                         </button>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Macro Badges (Fats using Yellow Ochre #eab308) */}
-                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
-                                    <span style={{ display: "flex", alignItems: "center", gap: "4px", backgroundColor: "rgba(168, 85, 247, 0.15)", color: "#a855f7", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
-                                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#a855f7" }}></span>
-                                        {Math.round(item.protein || 0)}g Protein
-                                    </span>
-                                    
-                                    <span style={{ display: "flex", alignItems: "center", gap: "4px", backgroundColor: "rgba(59, 130, 246, 0.15)", color: "#3b82f6", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
-                                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#3b82f6" }}></span>
-                                        {Math.round(item.carbs || 0)}g Carbs
-                                    </span>
-                                    
-                                    <span style={{ display: "flex", alignItems: "center", gap: "4px", backgroundColor: "rgba(234, 179, 8, 0.15)", color: "#eab308", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
-                                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#eab308" }}></span>
-                                        {Math.round(item.fats || 0)}g Fats
-                                    </span>
-                                </div>
-
+                                <button 
+                                    onClick={() => handleDelete(item._id)}
+                                    disabled={isDeleting || isEditing}
+                                    className="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error-container/30 transition-all disabled:opacity-50"
+                                    title="Delete Item"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
                             </div>
+                            
                         </div>
                     );
                 })}
             </div>
         )}
-
-        <style>{`
-            .meal-card:hover {
-                transform: translateX(4px);
-                border-color: #475569 !important;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            }
-            
-            .delete-btn {
-                background: transparent;
-                border: none;
-                color: #64748b;
-                font-size: 11px;
-                font-weight: 600;
-                cursor: pointer;
-                padding: 4px 8px;
-                border-radius: 6px;
-                transition: all 0.2s ease;
-            }
-
-            .meal-card:hover .delete-btn:not(:disabled) {
-                color: #ef4444;
-                background: rgba(239, 68, 68, 0.1);
-            }
-
-            .delete-btn:hover:not(:disabled) {
-                background: rgba(239, 68, 68, 0.2) !important;
-                transform: scale(1.05);
-            }
-            
-            .delete-btn:disabled {
-                cursor: not-allowed;
-                opacity: 0.7;
-            }
-        `}</style>
     </div>
   );
 };

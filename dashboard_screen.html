@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SEHAT Nutrition Dashboard</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Plus+Jakarta+Sans:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config injected from design system -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#2d6a4f",
+                        "tertiary-fixed-dim": "#b3cdb7",
+                        "secondary-fixed": "#a0f4c8",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#bfc9c1",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-primary": "#ffffff",
+                        "on-background": "#191c1d",
+                        "on-primary-container": "#a8e7c5",
+                        "surface-container-low": "#f3f4f5",
+                        "tertiary-container": "#4d6553",
+                        "inverse-on-surface": "#f0f1f2",
+                        "outline": "#707973",
+                        "primary-fixed": "#b1f0ce",
+                        "on-surface-variant": "#404943",
+                        "inverse-primary": "#95d4b3",
+                        "surface-container": "#edeeef",
+                        "surface-tint": "#2c694e",
+                        "error": "#ba1a1a",
+                        "secondary-container": "#a0f4c8",
+                        "on-tertiary-fixed": "#092012",
+                        "on-secondary-container": "#19724f",
+                        "on-surface": "#191c1d",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#364d3c",
+                        "background": "#f8f9fa",
+                        "surface-variant": "#e1e3e4",
+                        "surface": "#f8f9fa",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f8f9fa",
+                        "primary": "#0f5238",
+                        "on-tertiary-container": "#c6e1ca",
+                        "secondary": "#0e6c4a",
+                        "surface-container-high": "#e7e8e9",
+                        "primary-fixed-dim": "#95d4b3",
+                        "on-primary-fixed": "#002114",
+                        "on-primary-fixed-variant": "#0e5138",
+                        "on-tertiary-fixed-variant": "#354c3b",
+                        "tertiary-fixed": "#cee9d3",
+                        "surface-container-highest": "#e1e3e4",
+                        "surface-dim": "#d9dadb",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#85d7ad",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#2e3132",
+                        "on-secondary-fixed": "#002113"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "xl": "32px",
+                        "gutter": "16px",
+                        "base": "4px",
+                        "xs": "4px",
+                        "container-margin": "20px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "xxl": "48px",
+                        "md": "16px"
+                    },
+                    fontFamily: {
+                        "body-md": ["Inter"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "headline-sm": ["Plus Jakarta Sans"],
+                        "body-sm": ["Inter"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    fontSize: {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Ambient shadow for cards based on style guidance */
+        .ambient-shadow {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+        }
+        .ambient-shadow-hover:hover {
+            box-shadow: 0 8px 24px rgba(15, 82, 56, 0.08); /* Using primary color with low opacity */
+        }
+        
+        /* Custom progress ring animation */
+        @keyframes dash {
+            to { stroke-dashoffset: 60; }
+        }
+        .progress-ring {
+            stroke-dasharray: 251.2;
+            stroke-dashoffset: 251.2;
+            animation: dash 1.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased h-screen overflow-hidden flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- Shared Component: SideNavBar (Desktop) -->
+<nav class="bg-surface-container-lowest text-primary font-label-md text-label-md h-screen w-64 hidden lg:flex flex-col shadow-md fixed left-0 top-0 bottom-0 z-40 p-md justify-between">
+<div>
+<!-- Header -->
+<div class="mb-xl flex flex-col items-center pt-md">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center mb-sm">
+<span class="material-symbols-outlined text-on-primary-container text-headline-md" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<h1 class="font-headline-md text-headline-md text-primary font-bold">SEHAT</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Vitality through Clarity</p>
+</div>
+<!-- Navigation Links -->
+<ul class="space-y-sm">
+<!-- Active Item -->
+<li>
+<a class="flex items-center gap-sm px-md py-sm bg-secondary-container text-on-secondary-container rounded-lg font-bold scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+</li>
+<!-- Inactive Items -->
+<li>
+<a class="flex items-center gap-sm px-md py-sm text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-low rounded-lg transition-all scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="restaurant">restaurant</span>
+<span>Meal Logger</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-low rounded-lg transition-all scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+<span>Progress</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm text-on-surface-variant hover:bg-surface-container-low hover:bg-surface-container-low rounded-lg transition-all scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- CTA -->
+<div class="mt-auto">
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg flex items-center justify-center gap-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">add</span>
+                Log New Meal
+            </button>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col lg:ml-64 h-screen w-full relative">
+<!-- Shared Component: TopAppBar -->
+<header class="bg-surface text-primary font-headline-sm text-headline-sm w-full h-16 shadow-sm flex justify-between items-center px-gutter sticky top-0 z-50">
+<!-- Left Area: Search / Mobile Brand -->
+<div class="flex items-center gap-sm">
+<span class="lg:hidden font-headline-md text-headline-md font-bold text-primary">SEHAT</span>
+<div class="hidden md:flex items-center bg-surface-container-low rounded-full px-sm py-xs border border-transparent focus-within:border-primary focus-within:bg-surface transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-sm font-body-sm w-48 text-on-surface placeholder-on-surface-variant" placeholder="Search entries..." type="text"/>
+</div>
+</div>
+<!-- Right Area: Trailing Icons & Profile -->
+<div class="flex items-center gap-sm">
+<button class="p-xs text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-xs text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Dashboard Canvas -->
+<main class="flex-1 overflow-y-auto p-container-margin lg:p-xl pb-xxl lg:pb-xl bg-background">
+<div class="max-w-6xl mx-auto">
+<!-- Page Header -->
+<div class="mb-lg">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">Daily Overview</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-xs">Stay on track. You're doing great today.</p>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-md lg:gap-lg auto-rows-min">
+<!-- Main Calorie Tracker (Spans 8 cols on desktop) -->
+<section class="md:col-span-8 bg-surface rounded-xl ambient-shadow ambient-shadow-hover p-lg flex flex-col md:flex-row items-center justify-center gap-xl transition-shadow duration-300 relative overflow-hidden">
+<!-- Subtle decorative background element -->
+<div class="absolute -top-20 -right-20 w-64 h-64 bg-primary-container opacity-10 rounded-full blur-3xl pointer-events-none"></div>
+<!-- Circular Progress -->
+<div class="relative w-48 h-48 flex-shrink-0">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 100 100">
+<!-- Track -->
+<circle class="text-surface-variant" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-linecap="round" stroke-width="8"></circle>
+<!-- Progress -->
+<circle class="text-secondary progress-ring drop-shadow-sm" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<!-- Inner Text -->
+<div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+<span class="font-display-lg text-display-lg text-primary tracking-tight">1,240</span>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase mt-1">Remaining</span>
+</div>
+</div>
+<!-- Calorie Stats -->
+<div class="flex flex-col gap-md w-full max-w-xs">
+<div class="flex justify-between items-end border-b border-surface-variant pb-xs">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-body-sm">flag</span>
+<span class="font-body-sm text-body-sm">Base Goal</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-background">2,200</span>
+</div>
+<div class="flex justify-between items-end border-b border-surface-variant pb-xs">
+<div class="flex items-center gap-xs text-primary">
+<span class="material-symbols-outlined text-body-sm">restaurant</span>
+<span class="font-body-sm text-body-sm">Food</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-background">960</span>
+</div>
+<div class="flex justify-between items-end border-b border-surface-variant pb-xs">
+<div class="flex items-center gap-xs text-secondary">
+<span class="material-symbols-outlined text-body-sm">local_fire_department</span>
+<span class="font-body-sm text-body-sm">Exercise</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-background">0</span>
+</div>
+</div>
+</section>
+<!-- Macros Breakdown (Spans 4 cols on desktop) -->
+<section class="md:col-span-4 bg-surface rounded-xl ambient-shadow p-lg flex flex-col justify-between transition-shadow duration-300 hover:shadow-md">
+<h3 class="font-headline-md text-headline-md text-on-background mb-md">Macros</h3>
+<div class="space-y-md">
+<!-- Protein -->
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Protein</span>
+<span class="font-body-sm text-body-sm text-on-background"><span class="font-bold text-primary">45g</span> / 120g</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-2">
+<div class="bg-primary h-2 rounded-full" style="width: 37%"></div>
+</div>
+</div>
+<!-- Carbs -->
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Carbs</span>
+<span class="font-body-sm text-body-sm text-on-background"><span class="font-bold text-secondary">110g</span> / 250g</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-2">
+<div class="bg-secondary h-2 rounded-full" style="width: 44%"></div>
+</div>
+</div>
+<!-- Fats -->
+<div>
+<div class="flex justify-between mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Fats</span>
+<span class="font-body-sm text-body-sm text-on-background"><span class="font-bold text-tertiary">30g</span> / 65g</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-2">
+<div class="bg-tertiary h-2 rounded-full" style="width: 46%"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Water Intake (Spans 6 cols) -->
+<section class="md:col-span-6 bg-surface rounded-xl ambient-shadow p-lg flex flex-col justify-between">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-headline-md text-headline-md text-on-background">Hydration</h3>
+<span class="font-label-md text-label-md text-secondary bg-secondary-container px-sm py-xs rounded-full">4 / 8 Cups</span>
+</div>
+<div class="flex justify-between items-center w-full">
+<!-- Interactive Water Icons -->
+<button class="text-secondary hover:scale-110 transition-transform"><span class="material-symbols-outlined text-headline-lg" style="font-variation-settings: 'FILL' 1;">water_drop</span></button>
+<button class="text-secondary hover:scale-110 transition-transform"><span class="material-symbols-outlined text-headline-lg" style="font-variation-settings: 'FILL' 1;">water_drop</span></button>
+<button class="text-secondary hover:scale-110 transition-transform"><span class="material-symbols-outlined text-headline-lg" style="font-variation-settings: 'FILL' 1;">water_drop</span></button>
+<button class="text-secondary hover:scale-110 transition-transform"><span class="material-symbols-outlined text-headline-lg" style="font-variation-settings: 'FILL' 1;">water_drop</span></button>
+<button class="text-surface-variant hover:text-outline transition-colors"><span class="material-symbols-outlined text-headline-lg">water_drop</span></button>
+<button class="text-surface-variant hover:text-outline transition-colors"><span class="material-symbols-outlined text-headline-lg">water_drop</span></button>
+<button class="text-surface-variant hover:text-outline transition-colors"><span class="material-symbols-outlined text-headline-lg">water_drop</span></button>
+<button class="text-surface-variant hover:text-outline transition-colors"><span class="material-symbols-outlined text-headline-lg">water_drop</span></button>
+</div>
+</section>
+<!-- Weekly Activity Sparkline (Spans 6 cols) -->
+<section class="md:col-span-6 bg-surface rounded-xl ambient-shadow p-lg flex flex-col justify-between">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-headline-md text-headline-md text-on-background">Activity Trend</h3>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Last 7 Days</span>
+</div>
+<div class="h-16 w-full flex items-end justify-between gap-xs">
+<!-- Simulated Sparkline Bars -->
+<div class="w-full bg-surface-variant rounded-t-sm h-1/3 hover:bg-secondary transition-colors cursor-pointer" title="Mon: 20 mins"></div>
+<div class="w-full bg-surface-variant rounded-t-sm h-1/2 hover:bg-secondary transition-colors cursor-pointer" title="Tue: 30 mins"></div>
+<div class="w-full bg-secondary rounded-t-sm h-full cursor-pointer" title="Wed: 60 mins"></div>
+<div class="w-full bg-surface-variant rounded-t-sm h-1/4 hover:bg-secondary transition-colors cursor-pointer" title="Thu: 15 mins"></div>
+<div class="w-full bg-surface-variant rounded-t-sm h-2/3 hover:bg-secondary transition-colors cursor-pointer" title="Fri: 40 mins"></div>
+<div class="w-full bg-surface-variant rounded-t-sm h-1/3 hover:bg-secondary transition-colors cursor-pointer" title="Sat: 20 mins"></div>
+<div class="w-full bg-surface-variant rounded-t-sm h-1/6 hover:bg-secondary transition-colors cursor-pointer" title="Sun: 10 mins"></div>
+</div>
+</section>
+<!-- Today's Meals List (Spans 12 cols, sits below the rest) -->
+<section class="md:col-span-12 bg-surface rounded-xl ambient-shadow p-lg">
+<div class="flex justify-between items-center mb-lg">
+<h3 class="font-headline-md text-headline-md text-on-background">Today's Meals</h3>
+<button class="text-primary hover:bg-surface-container-low p-xs rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<div class="space-y-sm">
+<!-- Breakfast Entry -->
+<div class="flex items-center justify-between p-md rounded-lg hover:bg-surface-container-lowest border border-transparent hover:border-surface-variant transition-all cursor-pointer">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bakery_dining</span>
+</div>
+<div>
+<h4 class="font-body-md text-body-md font-semibold text-on-background">Breakfast</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Oatmeal with Berries</p>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-sm text-headline-sm text-primary block">320 kcal</span>
+</div>
+</div>
+<!-- Lunch Entry -->
+<div class="flex items-center justify-between p-md rounded-lg hover:bg-surface-container-lowest border border-transparent hover:border-surface-variant transition-all cursor-pointer">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lunch_dining</span>
+</div>
+<div>
+<h4 class="font-body-md text-body-md font-semibold text-on-background">Lunch</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Grilled Chicken Salad</p>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-sm text-headline-sm text-primary block">640 kcal</span>
+</div>
+</div>
+<!-- Dinner Entry (Empty state example) -->
+<div class="flex items-center justify-between p-md rounded-lg bg-surface-container-lowest border border-dashed border-outline-variant cursor-pointer hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+<div>
+<h4 class="font-body-md text-body-md font-semibold text-on-surface-variant">Dinner</h4>
+<p class="font-body-sm text-body-sm text-outline">Tap to log dinner</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+<!-- Shared Component: BottomNavBar (Mobile) -->
+<nav class="bg-surface-container-highest font-label-md text-label-md shadow-lg fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 lg:hidden">
+<!-- Active Tab: Home (Dashboard intent) -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full p-2 transition-all duration-200 ease-in-out w-16" href="#">
+<span class="material-symbols-outlined" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="text-[10px] mt-1 font-semibold">Home</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-xl p-2 transition-all duration-200 ease-in-out w-16" href="#">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+<span class="text-[10px] mt-1 font-medium">Log</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-xl p-2 transition-all duration-200 ease-in-out w-16" href="#">
+<span class="material-symbols-outlined" data-icon="timeline">timeline</span>
+<span class="text-[10px] mt-1 font-medium">Trends</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-xl p-2 transition-all duration-200 ease-in-out w-16" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-[10px] mt-1 font-medium">Profile</span>
+</a>
+</nav>
+</body></html>

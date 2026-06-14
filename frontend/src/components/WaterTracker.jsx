@@ -26,148 +26,94 @@ const WaterTracker = ({ log, userGoal, onUpdate }) => {
   const adjustAmount = (delta) => setAmount((prev) => Math.max(0, prev + delta));
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", padding: "10px" }}>
+    <div className="w-full h-full flex flex-col items-center justify-between font-sans">
       
       {/* Header */}
-      <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-         <h3 style={{ margin: 0, fontSize: "18px", color: "#fff" }}>Hydration</h3>
+      <div className="w-full flex justify-between items-center mb-6">
+         <h3 className="m-0 text-xl font-display font-bold text-on-surface tracking-tight">Hydration</h3>
          <span 
-            className="hover-badge" 
-            style={{ fontSize: "12px", fontWeight: "bold", color: "#0ea5e9", backgroundColor: "#1f2937", padding: "6px 10px", borderRadius: "8px", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.3)", cursor: "default" }}
+            className="text-xs font-bold bg-secondary-container text-on-secondary-container px-3 py-1.5 rounded-full cursor-default border border-secondary/10"
          >
             {current} / {userGoal} ml
          </span>
       </div>
 
-      <div className="water-sphere">
+      <div className="water-sphere mb-6">
             {!isEmpty && (
                 <div className="water-level" style={{ height: `${visualHeight}%` }}>
                     <div className="wave-back"></div>
                     <div className="wave-front"></div>
+                    <div className="water-body"></div>
                 </div>
             )}
             <div className="water-text">
-                <span className="amount">{displayPercentage}%</span>
+                <span className="amount font-display tracking-tighter">{displayPercentage}%</span>
             </div>
       </div>
 
       {/* --- SLEEK, MINIMALISTIC STEPPER CONTROLS --- */}
-      <div style={{ marginTop: "28px", width: "100%", maxWidth: "200px" }}>
+      <div className="w-full flex flex-col items-center gap-3">
           
-          {/* Glassmorphism Pill Stepper */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(30, 41, 59, 0.4)", backdropFilter: "blur(8px)", borderRadius: "30px", padding: "4px 6px", border: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="flex items-center gap-4">
               <button 
                 onClick={() => adjustAmount(-50)} 
-                className="stepper-btn"
-              >−</button>
+                className="w-10 h-10 rounded-full bg-surface-neutral hover:bg-surface-dim text-on-surface-variant flex items-center justify-center transition-colors shadow-sm border border-surface-dim"
+              >
+                 <span className="material-symbols-outlined text-sm">remove</span>
+              </button>
               
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", flex: 1 }}>
+              <div className="flex items-baseline justify-center w-20">
                   <input 
                     type="number" 
                     value={amount} 
                     onChange={(e) => setAmount(Number(e.target.value))} 
-                    className="hide-arrows smooth-input"
+                    className="w-14 text-right bg-transparent border-none text-on-background text-xl font-bold p-0 focus:ring-0 focus:outline-none hide-arrows"
                   />
-                  <span style={{ fontSize: "12px", color: "#64748b", fontWeight: "600", marginLeft: "2px" }}>ml</span>
+                  <span className="text-sm text-on-surface-variant font-bold ml-1">ml</span>
               </div>
               
               <button 
                 onClick={() => adjustAmount(50)} 
-                className="stepper-btn"
-              >+</button>
+                className="w-10 h-10 rounded-full bg-surface-neutral hover:bg-surface-dim text-on-surface-variant flex items-center justify-center transition-colors shadow-sm border border-surface-dim"
+              >
+                  <span className="material-symbols-outlined text-sm">add</span>
+              </button>
           </div>
 
           <button 
             onClick={() => handleUpdate(amount)} disabled={adding || amount <= 0}
-            className="add-water-btn"
-            style={{ opacity: adding ? 0.7 : 1 }}
+            className="w-full max-w-[200px] mt-2 py-3 rounded-full bg-primary hover:bg-secondary text-on-primary font-bold transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>water_drop</span>
             Add Water
           </button>
 
-          <div style={{ textAlign: "center", marginTop: "12px" }}>
-             <button onClick={() => handleUpdate(-amount)} style={{ background: "none", border: "none", color: "#64748b", fontSize: "11px", cursor: "pointer", textDecoration: "underline", transition: "color 0.2s" }} onMouseOver={(e) => e.target.style.color = "#ef4444"} onMouseOut={(e) => e.target.style.color = "#64748b"}>
-                Remove {amount}ml
-             </button>
-          </div>
+          <button 
+             onClick={() => handleUpdate(-amount)} 
+             className="text-xs text-on-surface-variant hover:text-error underline transition-colors mt-1"
+          >
+            Remove {amount}ml
+          </button>
       </div>
 
       <style>{`
-        .hover-badge { transition: transform 0.5s ease; display: inline-block; }
-        .hover-badge:hover { transform: scale(1.08); }
-
-        /* --- NEW MINIMALISTIC UI STYLES --- */
-        .stepper-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: transparent;
-            border: none;
-            color: #94a3b8;
-            font-size: 20px;
-            font-weight: 300;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-        }
-        .stepper-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-        }
-        .stepper-btn:active {
-            transform: scale(0.85);
-        }
-
-        .smooth-input {
-            width: 50px;
-            text-align: right;
-            background: transparent;
-            border: none;
-            color: #ffffff;
-            font-size: 18px;
-            font-weight: 700;
-            outline: none;
-            transition: color 0.2s ease;
-        }
-        .smooth-input:focus {
-            color: #0ea5e9;
-        }
-
-        .add-water-btn {
-            width: 100%;
-            margin-top: 14px;
-            padding: 12px;
-            border-radius: 30px; /* Pill shape */
-            background: linear-gradient(135deg, #0ea5e9, #2563eb);
-            color: white;
-            border: none;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
-        }
-        .add-water-btn:hover:not(:disabled) {
-            box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4);
-            transform: translateY(-2px);
-        }
-        .add-water-btn:active:not(:disabled) {
-            transform: translateY(1px);
-        }
-
         /* Input Arrow Hiding */
         .hide-arrows::-webkit-inner-spin-button, .hide-arrows::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .hide-arrows { -moz-appearance: textfield; }
 
         /* Sphere Elements */
-        .water-sphere { position: relative; width: 180px; height: 180px; border-radius: 50%; border: 4px solid #1e293b; background: #111827; box-shadow: 0 8px 16px rgba(0,0,0,0.4); overflow: hidden; z-index: 1; }
-        .water-level { position: absolute; bottom: 0; left: 0; width: 100%; background: linear-gradient(180deg, #0ea5e9 0%, #2563eb 100%); transition: height 1s cubic-bezier(0.4, 0, 0.2, 1); z-index: 2; }
-        .wave-front { position: absolute; top: -20px; left: 0; width: 200%; height: 22px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 88.7'%3E%3Cpath d='M800 56.9c-155.5 0-204.9-50-405.5-49.9-200 0-250 49.9-394.5 49.9v31.8h800v-.2-31.6z' fill='%230ea5e9'/%3E%3C/svg%3E"); background-size: 50% 100%; animation: waveMove 2.5s linear infinite; z-index: 2; }
-        .wave-back { position: absolute; top: -24px; left: 0; width: 200%; height: 25px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 88.7'%3E%3Cpath d='M800 56.9c-155.5 0-204.9-50-405.5-49.9-200 0-250 49.9-394.5 49.9v31.8h800v-.2-31.6z' fill='%230ea5e9' opacity='0.5'/%3E%3C/svg%3E"); background-size: 50% 100%; animation: waveMove 4s linear infinite; z-index: 1; }
+        .water-sphere { position: relative; width: 160px; height: 160px; border-radius: 50%; border: 4px solid #e1e3e4; background: #f8f9fa; box-shadow: inset 0 4px 10px rgba(0,0,0,0.05), 0 8px 16px rgba(0,0,0,0.1); overflow: hidden; z-index: 1; }
+        /* Using blue for water even in green theme for semantics, but lighter */
+        .water-level { position: absolute; bottom: 0; left: 0; width: 100%; transition: height 1s cubic-bezier(0.4, 0, 0.2, 1); z-index: 2; }
+        .water-body { position: absolute; inset: 0; background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%); z-index: 3; border-radius: 0 0 160px 160px; }
+        .wave-front { position: absolute; bottom: 100%; left: 0; width: 200%; height: 26px; margin-bottom: -10px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 88.7'%3E%3Cpath d='M800 56.9c-155.5 0-204.9-50-405.5-49.9-200 0-250 49.9-394.5 49.9v31.8h800v-.2-31.6z' fill='%233b82f6'/%3E%3C/svg%3E"); background-size: 50% 100%; animation: waveMove 2.5s linear infinite; z-index: 2; }
+        .wave-back { position: absolute; bottom: 100%; left: 0; width: 200%; height: 30px; margin-bottom: -10px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 88.7'%3E%3Cpath d='M800 56.9c-155.5 0-204.9-50-405.5-49.9-200 0-250 49.9-394.5 49.9v31.8h800v-.2-31.6z' fill='%233b82f6' opacity='0.5'/%3E%3C/svg%3E"); background-size: 50% 100%; animation: waveMove 4s linear infinite; z-index: 1; }
         .water-text { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; z-index: 10; pointer-events: none; }
-        .amount { font-size: 36px; font-weight: 900; color: #ffffff; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
+        /* Mixed blend mode so text shows up against both light background and dark water */
+        .amount { font-size: 32px; font-weight: 900; color: #181c1a; text-shadow: 0 2px 4px rgba(255,255,255,0.8); mix-blend-mode: overlay; z-index: 20;}
+        /* Workaround for blend mode not always playing nice with text-shadow */
+        .water-level + .water-text .amount { color: #ffffff; text-shadow: 0 2px 6px rgba(0,0,0,0.4); mix-blend-mode: normal; }
+        
         @keyframes waveMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
       `}</style>
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 
 // --- SUB-COMPONENT FOR MINI DONUTS ---
-const MiniMacroDonut = ({ label, current, target, color }) => {
+const MiniMacroDonut = ({ label, current, target, colorClass, strokeColor }) => {
     const size = 50;
     const stroke = 5; 
     const radius = (size - stroke) / 2;
@@ -38,44 +38,41 @@ const MiniMacroDonut = ({ label, current, target, color }) => {
 
     return (
         <div 
-            className="mini-donut-wrapper"
+            className="mini-donut-wrapper flex flex-col items-center gap-1.5 cursor-pointer"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             style={{ 
-                display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", cursor: "pointer",
                 "--mini-circumference": circumference,
                 "--mini-target": targetOffset
             }}
         >
-            <div style={{ position: "relative", width: size, height: size }}>
+            <div className="relative" style={{ width: size, height: size }}>
                 <svg width={size} height={size} style={{ transform: "rotate(-90deg)", overflow: "visible" }}>
                     
-                    {/* Clean 3D Drop Shadow */}
+                    {/* Background */}
                     <circle 
                         cx={size/2} cy={size/2} r={radius} 
-                        fill="none" stroke="#1f2937" strokeWidth={stroke} 
-                        style={{ filter: "drop-shadow(0px 8px 8px rgba(0,0,0,0.6))" }}
+                        fill="none" className="stroke-surface-dim" strokeWidth={stroke} 
                     />
                     
-                    {/* Glowing Colored Ring */}
+                    {/* Colored Ring */}
                     <circle 
                         className="mini-donut-fill"
                         cx={size/2} cy={size/2} r={radius} 
-                        fill="none" stroke={color} strokeWidth={stroke} 
+                        fill="none" stroke={strokeColor} strokeWidth={stroke} 
                         strokeDasharray={circumference} 
                         strokeDashoffset={targetOffset} 
                         strokeLinecap="round" 
-                        style={{ filter: `drop-shadow(0px 4px 6px ${color}80)` }} 
                     />
                 </svg>
 
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "bold", color: "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}>
+                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-on-surface">
                     {Math.round(displayPct)}%
                 </div>
             </div>
-            <div style={{ textAlign: "center", marginTop: "4px" }}>
-                <div style={{ fontSize: "11px", fontWeight: "bold", color: color, textTransform: "uppercase", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>{label}</div>
-                <div style={{ fontSize: "10px", color: "#9ca3af" }}>{current} / {target}g</div>
+            <div className="text-center mt-1">
+                <div className={`text-[11px] font-bold uppercase ${colorClass}`}>{label}</div>
+                <div className="text-[10px] text-on-surface-variant font-medium">{current} / {target}g</div>
             </div>
         </div>
     );
@@ -94,7 +91,7 @@ const CalorieDonut = ({ log, goal, macroGoals }) => {
   const fGoal = macroGoals?.fats || 70;
 
   const calPct = Math.min((totalCalories / safeGoal) * 100, 100);
-  const circumference = 2 * Math.PI * 80;
+  const circumference = 2 * Math.PI * 90; // Increased radius to 90
   const targetOffset = circumference - (calPct / 100) * circumference;
 
   const [displayCal, setDisplayCal] = useState(totalCalories);
@@ -125,77 +122,57 @@ const CalorieDonut = ({ log, goal, macroGoals }) => {
   }, [isHovered, totalCalories]);
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: "10px" }}>
+    <div className="w-full h-full flex flex-col items-center justify-center font-sans gap-8">
         
-        {/* HEADER */}
-        <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <h3 style={{ margin: 0, fontSize: "18px", color: "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.3)" }}>Daily Energy</h3>
-            
-            <span 
-                className="hover-badge" 
-                style={{ fontSize: "12px", fontWeight: "bold", backgroundColor: "#1f2937", color: "#ff7e35", padding: "6px 10px", borderRadius: "8px", cursor: "default", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.3)" }}
-            >
-                {totalCalories} / {safeGoal} kcal
-            </span>
-        </div>
-
         {/* MAIN CALORIE DONUT */}
         <div 
-            className="donut-wrapper"
+            className="donut-wrapper relative w-[200px] h-[200px] cursor-pointer"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             style={{ 
-                position: "relative", width: "180px", height: "180px", marginBottom: "20px", cursor: "pointer",
                 "--target-offset": targetOffset,
                 "--circumference": circumference
             }}
         >
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-                <span style={{ fontSize: "38px", fontWeight: "900", color: "#fff", textShadow: "0 4px 12px rgba(0,0,0,0.5)" }}>
-                    {displayCal} 
+            <div className="absolute inset-0 flex flex-col justify-center items-center">
+                <span className="text-[44px] font-black text-on-surface leading-none font-display text-primary tracking-tight">
+                    {Math.max(0, safeGoal - displayCal).toLocaleString()} 
                 </span>
-                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#9ca3af", letterSpacing: "1px", textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>CONSUMED</span>
+                <span className="text-xs font-bold text-on-surface-variant uppercase mt-1">REMAINING</span>
             </div>
             
-            <svg width="180" height="180" style={{ transform: "rotate(-90deg)", overflow: "visible" }}>
-                
-                {/* Background Shadow */}
+            <svg width="200" height="200" style={{ transform: "rotate(-90deg)", overflow: "visible" }}>
+                {/* Background Ring */}
                 <circle 
-                    cx="90" cy="90" r="80" 
-                    fill="none" stroke="#1f2937" strokeWidth="14" 
-                    style={{ filter: "drop-shadow(0px 15px 20px rgba(0,0,0,0.8))" }}
+                    cx="100" cy="100" r="90" 
+                    fill="none" className="stroke-surface-variant" strokeWidth="16" 
                 />
-                
                 {/* Main Calorie Ring */}
                 <circle 
                     className="main-donut-fill"
-                    cx="90" cy="90" r="80" 
-                    fill="none" stroke="#ff7e35" strokeWidth="14" 
+                    cx="100" cy="100" r="90" 
+                    fill="none" stroke="#0e6c4a" strokeWidth="16" 
                     strokeDasharray={circumference} 
                     strokeDashoffset={targetOffset} 
                     strokeLinecap="round"
-                    style={{ filter: "drop-shadow(0px 8px 16px rgba(255, 126, 53, 0.5))" }}
                 />
             </svg>
+            <style>{`
+                .main-donut-fill { transition: stroke-dashoffset 1s ease-out; }
+                .donut-wrapper:hover .main-donut-fill { animation: drawRing 1s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+                @keyframes drawRing { 0% { stroke-dashoffset: var(--circumference); } 100% { stroke-dashoffset: var(--target-offset); } }
+            `}</style>
         </div>
 
         {/* MINI MACRO DONUTS ROW */}
-        <div style={{ display: "flex", justifyContent: "space-around", width: "100%", borderTop: "1px solid #374151", paddingTop: "24px" }}>
-            <MiniMacroDonut label="Protein" current={protein} target={pGoal} color="#a855f7" />
-            <MiniMacroDonut label="Carbs" current={carbs} target={cGoal} color="#3b82f6" />
-            
-            {/* 🔥 NEW: Fats color changed to Yellow Ochre (#eab308) */}
-            <MiniMacroDonut label="Fats" current={fats} target={fGoal} color="#eab308" />
+        <div className="flex justify-center gap-8 w-full">
+            <MiniMacroDonut label="Protein" current={protein} target={pGoal} colorClass="text-secondary" strokeColor="#0e6c4a" />
+            <MiniMacroDonut label="Carbs" current={carbs} target={cGoal} colorClass="text-tertiary" strokeColor="#364d3c" />
+            <MiniMacroDonut label="Fats" current={fats} target={fGoal} colorClass="text-on-surface" strokeColor="#191c1d" />
         </div>
 
         {/* --- STYLES FOR ANIMATIONS --- */}
         <style>{`
-            .hover-badge { transition: transform 0.5s ease; display: inline-block; }
-            .hover-badge:hover { transform: scale(1.08); }
-
-            .main-donut-fill { transition: stroke-dashoffset 1s ease-out; }
-            .donut-wrapper:hover .main-donut-fill { animation: drawRing 1s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-            @keyframes drawRing { 0% { stroke-dashoffset: var(--circumference); } 100% { stroke-dashoffset: var(--target-offset); } }
 
             .mini-donut-fill { transition: stroke-dashoffset 1s ease-out; }
             .mini-donut-wrapper:hover .mini-donut-fill { animation: drawMiniRing 1s cubic-bezier(0.4, 0, 0.2, 1) forwards; }

@@ -6,14 +6,14 @@ import {
   removeFoodItem,   // Changed from removeMealItem
   updateWater,
   getTodayCategoryStats,
-  getHistoryLogs
+  getProgressLogs
 } from "../controllers/log.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 router.get("/today", protect, getTodayLog);
-router.get("/history", protect, getHistoryLogs);
+router.get("/progress", protect, getProgressLogs);
 
 router.post("/add-item", protect, addFoodItem); 
 

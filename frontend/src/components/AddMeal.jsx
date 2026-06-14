@@ -2,16 +2,17 @@ import { useState, useEffect } from "react";
 import api from "../api/axios";
 import CreateFoodModal from "./CreateFoodModal";
 import CreateRecipeModal from "./CreateRecipeModal";
+import Button from "./ui/Button";
 
 const UNIT_LABELS = { g: "grams", ml: "ml", piece: "pc", tbsp: "tbsp", cup: "cup" };
 const CATEGORIES = [
-  { label: "🕒 Recent", value: "recent" }, 
+  { label: <span className="material-symbols-outlined text-[18px] block">history</span>, value: "recent" }, 
   { label: "All", value: "" },
   { label: "🌾 Grains", value: "grains" },
-  { label: "🥦 Veg", value: "vegetables" },
-  { label: "🍎 Fruit", value: "fruits" },
   { label: "🥛 Dairy", value: "dairy" },
-  { label: "🥚 Protein", value: "meat" }, 
+  { label: "🥜 Legumes", value: "legumes" },
+  { label: "🥦 Vegetables", value: "vegetables" },
+  { label: "🍎 Fruits", value: "fruits" },
 ];
 
 function AddMeal({ onAdded }) {
@@ -81,49 +82,65 @@ function AddMeal({ onAdded }) {
 
   let displayItems = category === "recent" ? (search ? recents.filter(i => i.name.toLowerCase().includes(search.toLowerCase())) : recents) : (debouncedSearch ? results : []);
 
-  const styles = {
-      actionBtn: { flex: 1, padding: "10px", borderRadius: "10px", border: "1px dashed #475569", background: "#1e293b", color: "#94a3b8", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" },
-      catBtn: (active) => ({ padding: "6px 12px", borderRadius: "20px", border: "none", fontSize: "12px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap", background: active ? "#ff7e35" : "#374151", color: active ? "white" : "#94a3b8" }),
-      itemRow: (selected) => ({ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", borderRadius: "10px", marginBottom: "4px", cursor: "pointer", background: selected ? "rgba(255, 126, 53, 0.15)" : "transparent", border: selected ? "1px solid #ff7e35" : "1px solid transparent" })
-  };
-
   return (
-    <div style={{ width: "100%" }}>
+    <div className="w-full font-sans">
       {/* 1. Buttons */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
-        <button onClick={() => setShowCreateModal(true)} style={styles.actionBtn}>✏️ Custom Food</button>
-        <button onClick={() => setShowRecipeModal(true)} style={styles.actionBtn}>👨‍🍳 Create Recipe</button>
+      <div className="flex gap-3 mb-4">
+        <button onClick={() => setShowCreateModal(true)} className="flex-1 py-2 px-3 rounded-lg border border-dashed border-primary text-primary hover:bg-primary-fixed/50 font-semibold text-sm transition-colors flex items-center justify-center gap-1.5">
+            ✏️ Custom Food
+        </button>
+        <button onClick={() => setShowRecipeModal(true)} className="flex-1 py-2 px-3 rounded-lg border border-dashed border-primary text-primary hover:bg-primary-fixed/50 font-semibold text-sm transition-colors flex items-center justify-center gap-1.5">
+            👨‍🍳 Create Recipe
+        </button>
       </div>
 
       {/* 2. SEARCH BAR */}
-      <div style={{ display: "flex", alignItems: "center", background: "#111827", border: "1px solid #334155", borderRadius: "12px", padding: "0 14px", marginBottom: "12px", width: "100%", boxSizing: "border-box" }}>
-        <span style={{ fontSize: "16px", color: "#94a3b8", marginRight: "10px" }}>🔍</span>
+      <div className="flex items-center bg-surface-neutral border border-surface-dim rounded-xl px-4 mb-4 w-full transition-colors focus-within:border-primary focus-within:bg-surface">
+        <span className="text-on-surface-variant mr-2">🔍</span>
         <input 
             type="text" 
             placeholder="Search food..." 
             value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", color: "white", fontSize: "16px", padding: "14px 0", outline: "none" }} 
+            onChange={e => {
+                const val = e.target.value;
+                setSearch(val);
+                if (category === "recent" && val.length > 0) {
+                    setCategory(""); // Auto-switch to "All" when typing
+                }
+            }} 
+            className="flex-1 min-w-0 bg-transparent border-none text-on-surface text-base py-3 outline-none placeholder:text-gray-400" 
         />
       </div>
 
       {/* 3. Categories */}
-      <div className="custom-scrollbar" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "10px" }}>
-        {CATEGORIES.map(cat => (
-            <button key={cat.value} onClick={() => { setCategory(cat.value); setSelectedItem(null); }} style={styles.catBtn(category === cat.value)}>
-                {cat.label}
-            </button>
-        ))}
+      <div className="custom-scrollbar flex gap-2 overflow-x-auto pb-3 mb-2">
+        {CATEGORIES.map(cat => {
+            const isActive = category === cat.value;
+            // For the icon-only "recent" filter, adjust padding to make it perfectly round
+            const isIcon = cat.value === "recent";
+            return (
+                <button 
+                    key={cat.value} 
+                    onClick={() => { setCategory(cat.value); setSelectedItem(null); }} 
+                    className={`rounded-full border-none text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors flex items-center justify-center shrink-0 ${
+                        isIcon ? "w-8 h-8 p-0" : "px-4 py-1.5"
+                    } ${
+                        isActive ? "bg-primary text-on-primary" : "bg-surface-neutral text-on-surface-variant hover:bg-surface-dim hover:text-on-surface"
+                    }`}
+                    title={isIcon ? "Recent Foods" : ""}
+                >
+                    {cat.label}
+                </button>
+            );
+        })}
       </div>
 
       {/* 4. Results */}
-      <div className="custom-scrollbar" style={{ maxHeight: "250px", overflowY: "auto", minHeight: "100px", paddingRight: "4px" }}>
-        {loading && <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Searching...</div>}
-        {!loading && displayItems.length === 0 && <div style={{ textAlign: "center", padding: "20px", color: "#64748b", fontStyle: "italic" }}>No items found.</div>}
+      <div className="custom-scrollbar max-h-[250px] overflow-y-auto min-h-[100px] pr-1">
+        {loading && <div className="text-center p-5 text-on-surface-variant">Searching...</div>}
+        {!loading && displayItems.length === 0 && <div className="text-center p-5 text-on-surface-variant italic">No items found.</div>}
         
         {displayItems.map((item, idx) => {
-            
-            // 🔥 FIXED LOGIC: Stricter checking to prevent undefined === undefined
             const isSelected = selectedItem && (
                 (selectedItem._id && item._id && selectedItem._id === item._id) || 
                 (selectedItem === item) 
@@ -133,13 +150,15 @@ function AddMeal({ onAdded }) {
                 <div 
                     key={item._id || idx} 
                     onClick={() => { setSelectedItem(item); setUnit(item.baseUnit || "g"); }} 
-                    style={styles.itemRow(isSelected)}
+                    className={`flex justify-between items-center p-3 rounded-xl mb-1 cursor-pointer transition-all border ${
+                        isSelected ? "bg-primary-fixed border-primary shadow-sm" : "bg-transparent border-transparent hover:bg-surface-neutral"
+                    }`}
                 >
                     <div>
-                        <div style={{ fontWeight: "600", color: "#e2e8f0", fontSize: "14px" }}>{item.name}</div>
-                        <div style={{ fontSize: "11px", color: "#94a3b8" }}>{item.caloriesPer100g} kcal • {item.protein}p {item.carbs}c {item.fats}f</div>
+                        <div className={`font-bold text-sm ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{item.name}</div>
+                        <div className="text-xs text-on-surface-variant font-medium mt-0.5">{item.caloriesPer100g} kcal • {item.protein}p {item.carbs}c {item.fats}f</div>
                     </div>
-                    {isSelected && <span style={{ color: "#ff7e35", fontWeight: "bold" }}>✓</span>}
+                    {isSelected && <span className="text-primary font-bold">✓</span>}
                 </div>
             );
         })}
@@ -147,35 +166,35 @@ function AddMeal({ onAdded }) {
 
       {/* 5. Add Panel */}
       {selectedItem && (
-          <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #334155", display: "flex", gap: "10px", alignItems: "flex-end" }}>
-              <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: "11px", color: "#94a3b8", display: "block", marginBottom: "4px" }}>QUANTITY</label>
-                  <div style={{ display: "flex", gap: "5px" }}>
+          <div className="mt-4 pt-4 border-t border-surface-dim flex gap-3 items-end bg-surface-neutral p-4 rounded-xl">
+              <div className="flex-1">
+                  <label className="text-xs font-bold text-on-surface-variant uppercase tracking-wider block mb-1">QUANTITY</label>
+                  <div className="flex gap-2">
                     <input 
                         type="number" value={quantity} onChange={e => setQuantity(e.target.value)} autoFocus placeholder="0" 
-                        style={{ flex: 1, minWidth: 0, padding: "10px 12px", background: "#111827", color: "white", border: "1px solid #334155", borderRadius: "10px", outline: "none", boxSizing: "border-box" }} 
+                        className="flex-1 min-w-0 px-3 py-2 bg-surface text-on-surface border border-surface-dim rounded-lg outline-none focus:border-primary transition-colors" 
                     />
                     <select 
                         value={unit} onChange={e => setUnit(e.target.value)} 
-                        style={{ padding: "10px", borderRadius: "10px", background: "#111827", color: "#e2e8f0", border: "1px solid #334155", outline: "none", boxSizing: "border-box" }}
+                        className="px-3 py-2 rounded-lg bg-surface text-on-surface border border-surface-dim outline-none focus:border-primary transition-colors"
                     >
                         {Object.keys(UNIT_LABELS).map(k => <option key={k} value={k}>{UNIT_LABELS[k]}</option>)}
                     </select>
                   </div>
               </div>
-              <button onClick={handleAdd} style={{ height: "40px", padding: "0 20px", background: "#ff7e35", color: "white", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}>ADD</button>
+              <Button onClick={handleAdd}>ADD</Button>
           </div>
       )}
 
       {showCreateModal && <CreateFoodModal initialName={search} onClose={() => setShowCreateModal(false)} onSuccess={handleCustomFoodCreated} />}
       {showRecipeModal && <CreateRecipeModal onClose={() => setShowRecipeModal(false)} onSuccess={handleCustomFoodCreated} />}
 
-      {/* Global CSS for Dark Scrollbars */}
+      {/* Global CSS for Scrollbars */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
     </div>
   );
