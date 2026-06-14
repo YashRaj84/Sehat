@@ -5,7 +5,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import MealLogger from "./pages/MealLogger";
 import Progress from "./pages/Progress";
-import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -26,7 +26,7 @@ function App() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/meal-logger" element={<ProtectedRoute> <MealLogger /> </ProtectedRoute> } />
             <Route path="/progress" element={<ProtectedRoute> <Progress /> </ProtectedRoute> } />
-            <Route path="/profile" element={<ProtectedRoute> <Profile /> </ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute> <Settings /> </ProtectedRoute>} />
             {/* Added 'replace' to safely handle fallbacks */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>

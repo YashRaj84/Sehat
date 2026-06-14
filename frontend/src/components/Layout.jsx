@@ -11,8 +11,8 @@ const Layout = ({ children }) => {
   const navItems = [
     { name: "Dashboard", path: "/dashboard", icon: "dashboard", activeIcon: "dashboard", fill: true },
     { name: "Meal Logger", path: "/meal-logger", icon: "restaurant", activeIcon: "restaurant", fill: false },
-    { name: "Progress", path: "/progress", icon: "insights", activeIcon: "insights", fill: false }, // Placeholder route
-    { name: "Profile", path: "/profile", icon: "person", activeIcon: "person", fill: false }, // Profile settings
+    { name: "Progress", path: "/progress", icon: "insights", activeIcon: "insights", fill: false },
+    { name: "Settings", path: "/settings", icon: "settings", activeIcon: "settings", fill: false }, // Profile and configuration
   ];
 
   return (

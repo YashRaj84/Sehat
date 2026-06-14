@@ -6,7 +6,7 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 
-const Profile = () => {
+const Settings = () => {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
@@ -68,20 +68,35 @@ const Profile = () => {
       <div className="max-w-3xl mx-auto py-4 lg:py-8">
         
         <header className="mb-8">
-            <h1 className="font-display text-3xl font-bold tracking-tight mb-2">My Profile</h1>
-            <p className="text-on-surface-variant">Update your metrics to recalculate goals.</p>
+            <h1 className="font-display text-3xl font-bold tracking-tight mb-2">Settings</h1>
+            <p className="text-on-surface-variant">Manage your account details and body metrics.</p>
         </header>
 
+        {/* DEMOGRAPHICS (Read-Only) */}
+        <Card className="p-6 sm:p-8 mb-6">
+            <h3 className="font-display font-bold text-lg text-primary border-b border-surface-dim pb-2 mb-4">Account Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Email Address</div>
+                    <div className="text-on-surface font-medium">{user.email || "Not provided"}</div>
+                </div>
+                <div>
+                    <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Diet Type</div>
+                    <div className="text-on-surface font-medium capitalize">{user.dietType ? user.dietType.replace("_", " ") : "Not provided"}</div>
+                </div>
+            </div>
+        </Card>
+
         <Card className="p-6 sm:p-8">
-            {status && (
+            {(success || error) && (
               <div className={`p-4 rounded-xl mb-6 font-semibold text-sm ${
-                isSuccess ? "bg-primary-fixed text-primary border border-primary/20" : "bg-error-container text-error border border-error/20"
+                success ? "bg-primary-fixed text-primary border border-primary/20" : "bg-error-container text-error border border-error/20"
               }`}>
-                {status}
+                {success || error}
               </div>
             )}
 
-            <form onSubmit={handleSave} className="flex flex-col gap-8">
+            <form onSubmit={handleUpdate} className="flex flex-col gap-8">
                 
                 {/* Basic Info */}
                 <div>
@@ -130,9 +145,20 @@ const Profile = () => {
             </form>
         </Card>
 
+        {/* LOGOUT */}
+        <div className="mt-8 flex justify-center">
+            <button 
+                onClick={logout}
+                className="px-6 py-3 rounded-xl border border-error/30 text-error font-bold text-sm bg-error-container/20 hover:bg-error-container/50 transition-colors flex items-center gap-2"
+            >
+                <span className="material-symbols-outlined text-[18px]">logout</span>
+                Logout Account
+            </button>
+        </div>
+
       </div>
     </Layout>
   );
 };
 
-export default Profile;
+export default Settings;
