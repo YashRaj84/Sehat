@@ -3,6 +3,50 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import HealthTipsSlideshow from "./HealthTipsSlideshow";
 
+export const renderDietSymbol = (dietType) => {
+  const Wrapper = ({ children, title }) => (
+    <div 
+      className="w-9 h-9 bg-surface border border-surface-dim rounded-full shadow-sm flex items-center justify-center transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary-container/10 cursor-help shrink-0" 
+      title={title}
+    >
+      {children}
+    </div>
+  );
+
+  switch(dietType) {
+    case "veg":
+      return (
+        <Wrapper title="Vegetarian">
+          <div className="w-[18px] h-[18px] border-[2px] border-[#187a24] flex items-center justify-center bg-white shrink-0">
+            <div className="w-[10px] h-[10px] bg-[#187a24] rounded-full"></div>
+          </div>
+        </Wrapper>
+      );
+    case "eggetarian":
+      return (
+        <Wrapper title="Eggetarian">
+          <span className="material-symbols-outlined text-[20px] text-amber-500 drop-shadow-sm">egg</span>
+        </Wrapper>
+      );
+    case "non_veg":
+      return (
+        <Wrapper title="Non-Vegetarian">
+          <div className="w-[18px] h-[18px] border-[2px] border-[#8e3c1a] flex items-center justify-center bg-white shrink-0">
+            <div className="w-0 h-0 border-l-[5px] border-r-[5px] border-b-[9px] border-l-transparent border-r-transparent border-b-[#8e3c1a] mt-[1px]"></div>
+          </div>
+        </Wrapper>
+      );
+    case "vegan":
+      return (
+        <Wrapper title="Vegan">
+          <span className="material-symbols-outlined text-[20px] text-green-600 drop-shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>eco</span>
+        </Wrapper>
+      );
+    default:
+      return null;
+  }
+};
+
 const Layout = ({ children }) => {
   const location = useLocation();
   const { user } = useAuth();
@@ -82,15 +126,9 @@ const Layout = ({ children }) => {
             <HealthTipsSlideshow />
           </div>
 
-          {/* Right Area (DietType Badge) */}
+          {/* Right Area (Empty on desktop now, has slideshow on mobile) */}
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* Diet Type Highlight Badge */}
-            {user?.dietType && (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-primary-container/20 border border-primary/20 text-primary rounded-full text-xs font-bold uppercase tracking-wide cursor-default transition-all duration-300 hover:scale-105 hover:bg-primary-container/40 hover:shadow-sm">
-                <span className="material-symbols-outlined text-sm">restaurant</span>
-                {user.dietType.replace("_", " ")}
-              </div>
-            )}
+            {/* Mobile diet type badge fallback (if needed) or just the slideshow */}
             
             {/* Mobile slideshow fallback */}
             <div className="md:hidden flex-1 overflow-hidden ml-4">

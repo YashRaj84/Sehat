@@ -58,7 +58,7 @@ const userSchema = new mongoose.Schema(
 
     dietType: {
       type: String,
-      enum: ["veg", "eggetarian", "non_veg", "vegan", "jain"],
+      enum: ["veg", "eggetarian", "non_veg", "vegan"],
       required: true
     },
 

@@ -8,6 +8,8 @@ import Progress from "./pages/Progress";
 import Settings from "./pages/Settings";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+import DeletedUser from "./pages/DeletedUser";
+
 function App() {
   const { user } = useAuth();
 
@@ -18,6 +20,7 @@ function App() {
           <>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/deleted" element={<DeletedUser />} />
             {/* Added 'replace' to safely handle fallbacks */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </>

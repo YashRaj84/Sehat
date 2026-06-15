@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../api/axios";
-import Layout from "../components/Layout";
+import Layout, { renderDietSymbol } from "../components/Layout";
 import StaticWaterTracker from "../components/StaticWaterTracker";
 import CalorieDonut from "../components/CalorieDonut";
 import FoodTimeline from "../components/FoodTimeline";
@@ -50,9 +50,17 @@ function Dashboard() {
       <div className="max-w-6xl mx-auto">
         
         {/* Page Header */}
-        <div className="mb-6 lg:mb-8">
-            <h2 className="font-display text-2xl md:text-3xl font-bold text-on-background tracking-tight">Daily Overview</h2>
-            <p className="font-sans text-sm md:text-base text-on-surface-variant mt-1">Stay on track. You're doing great today.</p>
+        <div className="mb-6 lg:mb-8 flex justify-between items-end">
+            <div>
+                <h2 className="font-display text-2xl md:text-3xl font-bold text-on-background tracking-tight">Daily Overview</h2>
+                <p className="font-sans text-sm md:text-base text-on-surface-variant mt-1">Stay on track. You're doing great today.</p>
+            </div>
+            
+            {user?.dietType && (
+              <div className="mb-2">
+                {renderDietSymbol(user.dietType)}
+              </div>
+            )}
         </div>
 
         {/* Bento Grid Layout */}

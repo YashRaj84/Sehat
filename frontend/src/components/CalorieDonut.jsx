@@ -166,9 +166,9 @@ const CalorieDonut = ({ log, goal, macroGoals }) => {
 
         {/* MINI MACRO DONUTS ROW */}
         <div className="flex justify-center gap-8 w-full">
-            <MiniMacroDonut label="Protein" current={protein} target={pGoal} colorClass="text-secondary" strokeColor="#0e6c4a" />
-            <MiniMacroDonut label="Carbs" current={carbs} target={cGoal} colorClass="text-tertiary" strokeColor="#364d3c" />
-            <MiniMacroDonut label="Fats" current={fats} target={fGoal} colorClass="text-on-surface" strokeColor="#191c1d" />
+            <MiniMacroDonut label="Protein" current={protein} target={pGoal} colorClass="text-[#3B82F6]" strokeColor="#3B82F6" />
+            <MiniMacroDonut label="Carbs" current={carbs} target={cGoal} colorClass="text-[#F59E0B]" strokeColor="#F59E0B" />
+            <MiniMacroDonut label="Fats" current={fats} target={fGoal} colorClass="text-[#8B5CF6]" strokeColor="#8B5CF6" />
         </div>
 
         {/* --- STYLES FOR ANIMATIONS --- */}

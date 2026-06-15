@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, setUser, login, register, logout, loading }}>
       {/* Do not render the app until we finish checking for the user */}
       {!loading && children}
     </AuthContext.Provider>

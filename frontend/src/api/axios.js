@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://sehat-h4to.onrender.com/api",
+  baseURL: import.meta.env.MODE === "development" ? "http://localhost:5000/api" : "https://sehat-h4to.onrender.com/api",
 });
 
 api.interceptors.request.use((req) => {
@@ -23,7 +23,11 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("user");
 
-      window.location.href = "/login";
+      if (error.response?.data?.message === "User not found") {
+        window.location.href = "/deleted";
+      } else {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

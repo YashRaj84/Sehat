@@ -56,7 +56,15 @@ export const registerUser = async (req, res) => {
     token,
     user: {
       id: user._id,
+      name: user.name,
       email: user.email,
+      age: user.age,
+      gender: user.gender,
+      height: user.height,
+      weight: user.weight,
+      activityLevel: user.activityLevel,
+      goal: user.goal,
+      dietType: user.dietType,
       dailyCalorieLimit: user.dailyCalorieLimit
     }
   });

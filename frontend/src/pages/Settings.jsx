@@ -7,31 +7,31 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 
 const Settings = () => {
-  const { user, logout } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
-    name: "",
     age: "",
     gender: "male",
     height: "",
     weight: "",
     activityLevel: "moderate",
-    goal: "fat_loss"
+    goal: "fat_loss",
+    dietType: "veg"
   });
 
   useEffect(() => {
     if (user) {
       setForm({
-        name: user.name || "",
         age: user.age || "",
         gender: user.gender || "male",
         height: user.height || "",
         weight: user.weight || "",
         activityLevel: user.activityLevel || "moderate",
-        goal: user.goal || "fat_loss"
+        goal: user.goal || "fat_loss",
+        dietType: user.dietType || "veg"
       });
     }
   }, [user]);
@@ -47,12 +47,17 @@ const Settings = () => {
     setError("");
 
     try {
-      await api.put("/auth/update", {
+      const res = await api.put("/auth/profile", {
         ...form,
         age: Number(form.age),
         height: Number(form.height),
         weight: Number(form.weight)
       });
+      
+      const updatedUser = res.data.user;
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      
       setSuccess("Profile updated successfully!");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update profile");
@@ -72,21 +77,6 @@ const Settings = () => {
             <p className="text-on-surface-variant">Manage your account details and body metrics.</p>
         </header>
 
-        {/* DEMOGRAPHICS (Read-Only) */}
-        <Card className="p-6 sm:p-8 mb-6">
-            <h3 className="font-display font-bold text-lg text-primary border-b border-surface-dim pb-2 mb-4">Account Details</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                    <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Email Address</div>
-                    <div className="text-on-surface font-medium">{user.email || "Not provided"}</div>
-                </div>
-                <div>
-                    <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Diet Type</div>
-                    <div className="text-on-surface font-medium capitalize">{user.dietType ? user.dietType.replace("_", " ") : "Not provided"}</div>
-                </div>
-            </div>
-        </Card>
-
         <Card className="p-6 sm:p-8">
             {(success || error) && (
               <div className={`p-4 rounded-xl mb-6 font-semibold text-sm ${
@@ -98,10 +88,21 @@ const Settings = () => {
 
             <form onSubmit={handleUpdate} className="flex flex-col gap-8">
                 
-                {/* Basic Info */}
+                {/* Basic Info & Account Details */}
                 <div>
-                  <h3 className="font-display font-bold text-lg text-primary border-b border-surface-dim pb-2 mb-4">Basic Info</h3>
-                  <Input label="Full Name" name="name" value={form.name} onChange={handleChange} />
+                  <h3 className="font-display font-bold text-lg text-primary border-b border-surface-dim pb-2 mb-4">Account Details</h3>
+                  
+                  {/* Read-Only Demographics */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 p-4 bg-surface-neutral/50 rounded-xl border border-surface-dim/50">
+                      <div>
+                          <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Email Address</div>
+                          <div className="text-on-surface font-medium">{user.email || "Not provided"}</div>
+                      </div>
+                      <div>
+                          <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1">Full Name</div>
+                          <div className="text-on-surface font-medium capitalize">{user.name || "Not provided"}</div>
+                      </div>
+                  </div>
                 </div>
                 
                 {/* Metrics */}
@@ -114,10 +115,10 @@ const Settings = () => {
                   </div>
                 </div>
 
-                {/* Goals */}
+                {/* Goals & Preferences */}
                 <div>
                   <h3 className="font-display font-bold text-lg text-primary border-b border-surface-dim pb-2 mb-4">Preferences</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="flex flex-col gap-1.5">
                           <label className="text-xs font-semibold tracking-wider text-on-surface uppercase font-sans">Goal</label>
                           <select name="goal" value={form.goal} onChange={handleChange} className="w-full px-4 py-3 rounded-lg font-sans text-on-surface bg-surface-neutral border border-transparent transition-all duration-200 focus:bg-surface focus:border-primary focus:outline-none placeholder:text-gray-400">
@@ -135,6 +136,15 @@ const Settings = () => {
                               <option value="heavy">Very Active</option>
                           </select>
                       </div>
+                      <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-semibold tracking-wider text-on-surface uppercase font-sans">Diet Type</label>
+                          <select name="dietType" value={form.dietType} onChange={handleChange} className="w-full px-4 py-3 rounded-lg font-sans text-on-surface bg-surface-neutral border border-transparent transition-all duration-200 focus:bg-surface focus:border-primary focus:outline-none placeholder:text-gray-400">
+                              <option value="veg">Vegetarian</option>
+                              <option value="eggetarian">Eggetarian</option>
+                              <option value="non_veg">Non-Vegetarian</option>
+                              <option value="vegan">Vegan</option>
+                          </select>
+                      </div>
                   </div>
                 </div>
 
@@ -149,10 +159,10 @@ const Settings = () => {
         <div className="mt-8 flex justify-center">
             <button 
                 onClick={logout}
-                className="px-6 py-3 rounded-xl border border-error/30 text-error font-bold text-sm bg-error-container/20 hover:bg-error-container/50 transition-colors flex items-center gap-2"
+                className="px-6 py-3 rounded-xl border border-error/30 text-error font-bold text-sm bg-error-container/20 transition-all duration-300 flex items-center gap-2 hover:bg-error hover:text-white hover:border-error hover:shadow-[0_4px_12px_rgba(186,26,26,0.3)] hover:-translate-y-0.5"
             >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
-                Logout Account
+                Logout
             </button>
         </div>
 
